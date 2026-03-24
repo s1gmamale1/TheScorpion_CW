@@ -1,0 +1,85 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cc91c1b0933df408f8a8ceb261f02b2a, type: 3}
+  m_Name: Level1_Waves
+  m_EditorClassIdentifier: Assembly-CSharp::TheScorpion.Data.WaveDataSO
+  waves:
+  - waveNumber: 1
+    basicEnemyCount: 3
+    fastEnemyCount: 0
+    heavyEnemyCount: 0
+    isBossWave: 0
+    delayBeforeWave: 3
+    spawnInterval: 0.5
+  - waveNumber: 2
+    basicEnemyCount: 5
+    fastEnemyCount: 0
+    heavyEnemyCount: 0
+    isBossWave: 0
+    delayBeforeWave: 3
+    spawnInterval: 0.5
+  - waveNumber: 3
+    basicEnemyCount: 3
+    fastEnemyCount: 1
+    heavyEnemyCount: 0
+    isBossWave: 0
+    delayBeforeWave: 3
+    spawnInterval: 0.5
+  - waveNumber: 4
+    basicEnemyCount: 4
+    fastEnemyCount: 2
+    heavyEnemyCount: 0
+    isBossWave: 0
+    delayBeforeWave: 3
+    spawnInterval: 0.5
+  - waveNumber: 5
+    basicEnemyCount: 3
+    fastEnemyCount: 1
+    heavyEnemyCount: 1
+    isBossWave: 0
+    delayBeforeWave: 3
+    spawnInterval: 0.5
+  - waveNumber: 6
+    basicEnemyCount: 4
+    fastEnemyCount: 2
+    heavyEnemyCount: 1
+    isBossWave: 0
+    delayBeforeWave: 3
+    spawnInterval: 0.5
+  - waveNumber: 7
+    basicEnemyCount: 2
+    fastEnemyCount: 3
+    heavyEnemyCount: 1
+    isBossWave: 0
+    delayBeforeWave: 3
+    spawnInterval: 0.5
+  - waveNumber: 8
+    basicEnemyCount: 4
+    fastEnemyCount: 2
+    heavyEnemyCount: 2
+    isBossWave: 0
+    delayBeforeWave: 3
+    spawnInterval: 0.5
+  - waveNumber: 9
+    basicEnemyCount: 0
+    fastEnemyCount: 4
+    heavyEnemyCount: 2
+    isBossWave: 0
+    delayBeforeWave: 3
+    spawnInterval: 0.5
+  - waveNumber: 10
+    basicEnemyCount: 0
+    fastEnemyCount: 0
+    heavyEnemyCount: 0
+    isBossWave: 1
+    delayBeforeWave: 5
+    spawnInterval: 0

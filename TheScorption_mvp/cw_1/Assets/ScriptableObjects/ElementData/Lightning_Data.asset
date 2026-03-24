@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d37bb0a2396da4df484b88d46c65363c, type: 3}
+  m_Name: Lightning_Data
+  m_EditorClassIdentifier: Assembly-CSharp::TheScorpion.Data.ElementDataSO
+  elementType: 2
+  elementName: Lightning
+  elementColor: {r: 0.3, g: 0.7, b: 1, a: 1}
+  ability1Name: Lightning Burst
+  ability1Damage: 20
+  ability1Radius: 3
+  ability1Cooldown: 6
+  ability1Cost: 35
+  ability1Duration: 0
+  ability2Name: Lightning Speed
+  ability2Duration: 5
+  ability2Cooldown: 15
+  ability2Cost: 50
+  ability2BurnDamagePerTick: 5
+  ability2AttackSpeedBonus: 0.4
+  ability2MoveSpeedBonus: 0.25
+  burstDamage: 40
+  burstRadius: 15
+  burstStunDuration: 2
+  ability1VFXPrefab: {fileID: 1000011128802252, guid: 96730f8640590934eacb6f860058e7f9, type: 3}
+  ability2VFXPrefab: {fileID: 1000013462590818, guid: ecdd96beb7f93494880c052dfccf9dc1, type: 3}
+  burstVFXPrefab: {fileID: 1000011128802252, guid: 96730f8640590934eacb6f860058e7f9, type: 3}
+  weaponTrailColor: {r: 0.4, g: 0.8, b: 1, a: 1}
