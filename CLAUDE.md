@@ -92,5 +92,11 @@ All custom scripts in `Assets/Scripts/` use composition — separate MonoBehavio
 - Custom scripts go in `TheScorption_mvp/cw_1/Assets/Scripts/` organized by folder
 - Reference scripts in `Project Architechrure/extracted/` are design intent only — rewrite for Invector compatibility
 - Prioritize working prototype over polish (deadline: <1 week)
-- User preference: autonomous execution — complete full stages, self-check, proceed
-- **Update `DEV_LOG.md` after every substantive response** — this is the persistent context across sessions
+- User preference: autonomous execution — complete full stages without stopping, self-check, proceed to next stage
+
+## Session Continuity (CRITICAL)
+
+- **Read `DEV_LOG.md` at the start of every session** — it has full status of what's built, what's next, and session history
+- **Update `DEV_LOG.md` after every substantive response** — append what was done, update checkboxes, note any issues. This is the persistent context across sessions, like auto-save in a game.
+- **Read research docs on-demand**, not upfront — `docs/research/` has 12+ files. Only read the ones relevant to the current task to keep context lean. Always check if a research file exists for the topic before implementing.
+- **ZZZ (Zenless Zone Zero) is the visual/gameplay reference** — camera feel, combat feel, UI style
