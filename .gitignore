@@ -37,6 +37,10 @@ mcp-tools/anthropic-quickstarts/
 # Claude
 .claude/projects/*/d664b9d8*/
 
+# Secrets
+.env
+.env.*
+
 # Misc
 *.log
 /private/tmp/

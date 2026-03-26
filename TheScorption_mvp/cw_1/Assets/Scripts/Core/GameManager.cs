@@ -84,6 +84,13 @@ namespace TheScorpion.Core
                 UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
         }
 
+        public void SetGameState(GameState state)
+        {
+            currentState = state;
+            if (state == GameState.Victory || state == GameState.GameOver)
+                Time.timeScale = 0f;
+        }
+
         public bool IsPlaying => currentState == GameState.Playing;
     }
 }

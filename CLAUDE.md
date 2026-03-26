@@ -4,58 +4,93 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**The Scorpion** — a fast-paced arena combat / hack-and-slash game built in Unity (C#). A masked warrior with dual blades fights through 10 waves of enemies using elemental powers (Fire + Lightning) in a single arena, culminating in a 3-phase boss fight.
+**The Scorpion** — a fast-paced arena combat / hack-and-slash game built in Unity (C#). A masked warrior with dual blades fights through 10 waves of enemies using elemental powers (Fire + Lightning) in a single arena, culminating in a 3-phase boss fight. Visual reference: Zenless Zone Zero.
 
-- **Engine**: Unity 6 (URP) or Unity 2022.3 LTS
+- **Engine**: Unity 6000.4.0f1 (URP)
 - **Framework**: Invector Third Person Controller — Melee Combat Template (v2.6.5)
 - **Unity Project Path**: `TheScorption_mvp/cw_1/`
 - **Design Docs**: `Project Architechrure/extracted/TheScorpion/docs/`
-- **Reference Scripts**: `Project Architechrure/extracted/TheScorpion/Assets/Scripts/`
+- **Reference Scripts**: `Project Architechrure/extracted/TheScorpion/Assets/Scripts/` (written WITHOUT Invector — design intent only, not drop-in code)
+- **Research Docs**: `docs/research/` (12 files) and `docs/tutorials/` (3 files) — Invector source analysis, community tips, game design references
+- **Dev Log**: `DEV_LOG.md` at project root — **MUST read at session start, MUST update after every response**
+- **Build Plan**: `~/.claude/plans/joyful-wiggling-melody.md` — 6-day build schedule
 
 ## Architecture
 
 ### Invector (Purchased Asset — DO NOT MODIFY)
-Located in `Assets/Invector-3rdPersonController/`. Provides third-person controller, melee combat system, health/stamina, dodge/roll, lock-on, animator integration, and basic AI templates. All custom game systems must **extend or hook into** Invector's systems, not replace them.
 
-Key Invector classes to integrate with:
-- `vThirdPersonController` / `vThirdPersonInput` — player movement
-- `vMeleeCombatInput` / `vMeleeManager` — combat/combos
-- `vHealthController` — health/damage
-- `vMeleeAI` — enemy AI base
+Located in `Assets/Invector-3rdPersonController/`. Provides third-person controller, melee combat, health/stamina, dodge/roll, lock-on, animator, and Simple Melee AI.
 
-### Custom Systems (Built on Top of Invector)
-| System | Purpose |
-|--------|---------|
-| ElementSystem | Fire/Lightning switching, abilities, energy management |
-| UltimateSystem | Adrenaline meter, Adrenaline Rush (time-slow ultimate) |
-| WaveManager | 10-wave spawn progression with enemy composition |
-| EnemyAI (3 types) | Hollow Monk (basic), Shadow Acolyte (fast), Stone Sentinel (heavy) |
-| BossAI | The Fallen Guardian — 3-phase boss with summons |
-| HUDController | Health, adrenaline, element indicator, wave counter, ability cooldowns |
-| GameManager | Game state, pause, restart |
+**Damage Flow (critical to understand):**
+```
+Player Input → Animator → vMeleeAttackControl (StateMachineBehaviour)
+→ vMeleeManager.SetActiveAttack() → vHitBox.OnTriggerEnter
+→ vMeleeManager.OnDamageHit(vHitInfo) → target.TakeDamage(vDamage)
+→ vHealthController events: onStartReceiveDamage → onReceiveDamage → onDead
+```
+
+**Key Invector hooks (subscribe via events, never modify source):**
+- `vMeleeManager.onDamageHit` — when player's attack hits (energy gain, adrenaline, feedback)
+- `vHealthController.onStartReceiveDamage` — before damage applied (element resistance)
+- `vHealthController.onReceiveDamage` — after damage applied (status effects)
+- `vHealthController.onDead` — on kill (wave tracking, adrenaline)
+- `vDamage.damageType` — string field used for element identification ("Fire", "Lightning")
+
+**Key Invector classes:**
+- `vThirdPersonController` / `vThirdPersonInput` — player movement + camera reference
+- `vMeleeCombatInput` / `vMeleeManager` — combat/combos, `onDamageHit` event
+- `vHealthController` — health/damage, `onReceiveDamage`/`onDead` events
+- `vThirdPersonCamera` — camera system with CameraStateList, `selfRigidbody` property
+- Simple Melee AI (`vSimpleMeleeAI_Controller`) — coroutine-based states: Idle/Patrol/Chase/Attack
+
+**AI setup requirements:** Tag=Enemy, Layer=Enemy, NavMesh baked, detection tags include "Player", MeleeManager damage layers include Player, Ragdoll required for hit reactions.
+
+**Critical gotcha:** `vThirdPersonCamera.selfRigidbody` getter calls `AddComponent<Rigidbody>()`. If a Rigidbody already exists, it fails silently and returns null → NullReferenceException → camera never initializes. Fixed by `CameraRigidbodyFix.cs` which pre-assigns the existing Rigidbody via reflection in Awake (ExecutionOrder -100).
+
+### Custom Systems (namespace: `TheScorpion.*`)
+
+All custom scripts in `Assets/Scripts/` use composition — separate MonoBehaviours alongside Invector components, connected via events.
+
+**Player GameObject stack:**
+- Invector: `vThirdPersonController`, `vMeleeCombatInput`, `vMeleeManager`, `vHealthController`
+- Custom: `ScorpionInputHandler` (Q/E/F/R/V keys), `ElementSystem`, `UltimateSystem`, `StyleMeter`, `DamageInterceptor`, `PlayerDeathHandler`
+
+**Enemy GameObject stack:**
+- Invector: Simple Melee AI, `vMeleeManager`, `vHealthController`, NavMeshAgent
+- Custom: `EnemyExtension` (loads EnemyDataSO, hooks onDead), `EnemyStatusEffects` (burn/stun), `ElementalDamageProcessor` (element resistance), `EnemyPoiseSystem` (stagger gauge)
+
+**Singleton managers:** `GameManager`, `WaveManager`, `SpawnPointManager`, `AttackQueueManager`, `CameraShakeController`
+
+**Event system:** ScriptableObject event channels (`VoidEventChannelSO`, `IntEventChannelSO`, `FloatEventChannelSO`, `DamageEventChannelSO`) for decoupled communication.
+
+**Data-driven:** `EnemyDataSO`, `WaveDataSO`, `ElementDataSO` ScriptableObjects hold all tunable values.
 
 ### Key Design Specs (from GDD)
 - **Arena**: 25m × 25m courtyard, 4 spawn points (N/S/E/W)
 - **Elements**: Fire (DoT, area denial) and Lightning (speed, CC). One active at a time, switch with Q/E
 - **Element Energy**: Max 100, regen 3/sec + 5 per hit
 - **Adrenaline**: +2 per hit, +5 per kill, +10 per combo finisher. Ultimate at 100: 8s time-slow + damage boost
-- **Enemy-Element Interactions**: Fire burns slow Fast enemies; Lightning stuns but no knockback on Heavy
-- **Boss Phases**: Phase 1 (100-60% HP) sword combos + summons, Phase 2 (60-30%) fire aura + wave attack, Phase 3 (30-0%) enraged pure aggression
+- **Poise/Stagger**: Hidden gauge per enemy. Lightning +20 disruption, Fire +5. Break = 1.5s stagger window
+- **Style Meter**: D/C/B/A/S ranks multiplying Adrenaline gain
+- **Boss Phases**: Phase 1 (100-60% HP) sword combos + summons, Phase 2 (60-30%) fire aura, Phase 3 (30-0%) enraged
 
 ## MCP Tools
 
-Four macOS GUI automation MCP servers are configured in `mcp-tools/`:
-- **automation-mcp** — mouse, keyboard, screenshots, window management (runs via npx tsx)
-- **mac-commander** — visual AI, OCR, smart UI detection (node)
-- **mac-mcp-server** — 44 AppleScript tools for full macOS control (node)
-- **macos-gui** — accessibility framework GUI control (python3)
+- **mcp-unity** — Direct Unity Editor control: get/set GameObjects, components, scenes, execute menu items, read console logs, recompile scripts
+- **mac-commander** — Screenshots, click, type, window management
+- **mac-mcp-server** — AppleScript tools: activate apps, key combinations, window control
 
-These enable Claude Code to interact with the Unity Editor directly.
+**Unity is on a separate macOS Desktop/Space.** Switch desktops before taking screenshots. Use `mcp-unity` for programmatic interaction without needing the visual.
 
-## Development Workflow
+**Workflow:** Write script → `recompile_scripts` → check for errors → `update_component` to add to GameObjects → `save_scene` → test via Play mode (`key_combination` Cmd+P) → `get_console_logs` to verify.
 
-- Custom scripts go in `TheScorption_mvp/cw_1/Assets/Scripts/`
-- All custom code must be compatible with Invector's architecture (extend, don't replace)
-- Reference scripts in `Project Architechrure/extracted/` were written WITHOUT Invector — use for design intent only, not as drop-in code
-- The user operates under a tight deadline (<1 week) — prioritize working prototype over polish
-- User preference: autonomous execution — complete full task stages without stopping, self-check, then proceed to next stage
+## Development Rules
+
+- **NEVER modify** files in `Assets/Invector-3rdPersonController/`
+- Always extend Invector via events, callbacks, or separate MonoBehaviours
+- Use `vDamage.damageType` strings for element identification
+- Custom scripts go in `TheScorption_mvp/cw_1/Assets/Scripts/` organized by folder
+- Reference scripts in `Project Architechrure/extracted/` are design intent only — rewrite for Invector compatibility
+- Prioritize working prototype over polish (deadline: <1 week)
+- User preference: autonomous execution — complete full stages, self-check, proceed
+- **Update `DEV_LOG.md` after every substantive response** — this is the persistent context across sessions
