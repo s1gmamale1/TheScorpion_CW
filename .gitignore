@@ -30,12 +30,15 @@ TheScorption_mvp/cw_1/MemoryCaptures/
 .Trashes
 Thumbs.db
 
-# MCP tools node_modules
-mcp-tools/*/node_modules/
-mcp-tools/anthropic-quickstarts/
+# MCP tools — separate repos, install via npm on other PC
+mcp-tools/
 
-# Claude
-.claude/projects/*/d664b9d8*/
+# Claude local settings
+.claude/settings.local.json
+.claude/projects/
+
+# Non-project files
+dw&v_coursework*
 
 # Secrets
 .env
