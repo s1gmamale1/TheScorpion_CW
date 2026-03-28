@@ -1,149 +1,172 @@
 # The Scorpion — Dev Log
-> Auto-updated after every response. This is the persistent context file across sessions.
+> Auto-updated after every response. Read this FIRST at session start.
 
 ---
 
 ## Project Status: Day 4 of 6
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-03-28 Session 2 End
 **Plan File:** `~/.claude/plans/joyful-wiggling-melody.md`
 
 ---
 
-## DONE
+## WORKING RIGHT NOW (Verified in Play Mode)
+- Player movement, dodge, sprint (Invector handles it)
+- Melee combat — attacks apply active element damageType
+- Element switching Q/E (Fire/Lightning)
+- Projectiles C key with auto-aim
+- Ability 1 (F): Fire Tornado AoE / Lightning Burst AoE+stun
+- Ability 2 (R): Fire Aura (burn on melee, orange glow VFX) / Lightning Speed (move+atk boost, blue glow VFX)
+- Ultimate V: 8s time-slow + 50% damage + 30% atk speed + elemental burst at end with VFX + camera shake
+- Adrenaline system: +2 hit, +5 kill, +10 finisher, +1 on damage taken
+- Combo tracking: 3+ hits = finisher. Combo boosts MP/stamina regen.
+- Style meter: D→S ranks, variety rewarded
+- Camera: ZZZ style, camera shake on hits/finishers
+- Wave system: 10 waves, enemy count doubles, max 10 on screen, trickle spawn
+- Wave kill tracking + wave progression (WORKING — kills register, Wave CLEARED, next wave starts)
+- Dead body cleanup: max 5 corpses, 5s auto-destroy
+- Enemies spawn 5-10m around player, face player, force aggro via SetCurrentTarget
+- ShadowAcolyteBehavior: sprint in, 2-hit combo, retreat 6m, circle, re-engage
+- StoneSentinelBehavior: slow, blocks 40%, 50% light attack reduction
+- Invector HUD: HP bar + stamina bar (working, not hidden)
+- Melee attacks cost 0 stamina (StaminaFix.cs)
+- Minimap: top-right (square — needs round mask)
+- Invector watermark logo: DELETED from scene
 
-### Core Systems
-- [x] GameManager (state, pause, restart, SetGameState)
-- [x] ScorpionEnums (ElementType, GameState, EnemyType, StyleRank)
-- [x] Event Channels (Void, Float, Int, Damage SO channels)
-- [x] Editor Tools (PlayerSetup, CameraSetup, NavMeshBaker, DataAssetCreator, Rebalance)
+## CUSTOM HUD STATE (ScorpionHUD.cs)
+Currently minimal — only has:
+- Wave announcement (code exists, triggers on wave change, but NEEDS TESTING — may not show visually)
+- Invector watermark text hiding
+- Invector HUD is NOT hidden (it's running and showing HP/stamina)
+- Our canvas sits on top at sortingOrder 10
 
-### Player / MC (COMPLETE)
-- [x] ScorpionInputHandler — Q/E/F/R/V/C/LeftCtrl/Esc input
-- [x] ElementSystem — Fire/Lightning switching, MP energy, projectiles (C key, auto-aim), Fire Tornado AoE, Lightning Burst AoE+stun, Fire Aura buff (burn on melee), Lightning Speed buff (move+atk speed)
-- [x] UltimateSystem — Adrenaline meter, 8s time-slow, +50% damage, +30% attack speed, elemental burst at end with VFX + camera shake
-- [x] DamageInterceptor — melee applies element damageType, combo tracking (3+ = finisher), style meter integration, Fire Aura burn-on-hit, ultimate damage multiplier, combo regen bonus (MP + stamina)
-- [x] StyleMeter — D/C/B/A/S ranks, variety rewarded, drops on hit
-- [x] PlayerDeathHandler
-- [x] Melee attacks cost 0 stamina (only sprint/dodge drain)
+## KEY FILES TO KNOW
+| File | What it does |
+|------|-------------|
+| `Assets/Scripts/UI/ScorpionHUD.cs` | Custom HUD overlay — currently just wave announce + watermark hide |
+| `Assets/Scripts/UI/MinimapController.cs` | Top-right minimap camera (square, needs round) |
+| `Assets/Scripts/Systems/WaveManager.cs` | 10-wave system, spawn near player, kill tracking, dead body cleanup |
+| `Assets/Scripts/Systems/SpawnPointManager.cs` | Spawn point positions (currently unused — WaveManager spawns near player directly) |
+| `Assets/Scripts/Combat/DamageInterceptor.cs` | Bridge between Invector combat and our systems — element damage, combo, adrenaline, style |
+| `Assets/Scripts/Player/ElementSystem.cs` | Fire/Lightning abilities, projectiles, MP energy |
+| `Assets/Scripts/Player/UltimateSystem.cs` | Adrenaline + ultimate activation with VFX |
+| `Assets/Scripts/Player/StaminaFix.cs` | Zeros weapon stamina costs at runtime |
+| `Assets/Scripts/Player/ScorpionInputHandler.cs` | Custom input: Q/E/F/R/V/C/LeftCtrl/Esc |
+| `Assets/Scripts/Enemy/ShadowAcolyteBehavior.cs` | Fast enemy AI behavior |
+| `Assets/Scripts/Enemy/StoneSentinelBehavior.cs` | Tank enemy AI behavior |
+| `Assets/Scripts/Enemy/EnemyExtension.cs` | Loads SO data onto Invector enemy, hooks onDead |
+| `Assets/Scripts/Enemy/EnemyStatusEffects.cs` | Burn DoT, stun |
+| `Assets/Scripts/Enemy/ElementalDamageProcessor.cs` | Element resistance, triggers status effects |
+| `Assets/Scripts/Enemy/EnemyPoiseSystem.cs` | Hidden stagger gauge |
+| `Assets/Scripts/Camera/CameraRigidbodyFix.cs` | Fixes Invector camera Rigidbody bug via reflection |
+| `Assets/Scripts/Core/Editor/DataAssetCreator.cs` | Editor tools: create SOs, wire scene, create prefabs, rebalance |
+| `Assets/Scripts/Core/Editor/CameraSetupTool.cs` | ZZZ camera values + Rigidbody fix tool |
 
-### Camera
-- [x] CameraRigidbodyFix — pre-assigns Rigidbody via reflection (fixes Invector NullRef)
-- [x] ZZZ-style camera values (smoothRot=20, centered, FOV=55, autoBehind)
-- [x] CameraShakeController — attack/hit/heavy/custom shake profiles
+## SCENE HIERARCHY (key objects)
+- `vMeleeController_Inventory` — Player (Invector controller + our custom scripts)
+  - `Invector Components/vThirdPersonCamera` — Camera (has CameraRigidbodyFix + CameraShakeController)
+  - `Invector Components/UI` — Invector's HUD canvas (HP/stamina sliders, logo deleted)
+- `--- Managers ---/` — Parent for manager objects
+  - `WaveManager` — wave spawning
+  - `SpawnPointManager` — spawn points (4 children: N/S/E/W)
+  - `AttackQueueManager` — limits simultaneous attackers
+  - `ScorpionHUD` — our custom HUD overlay
+  - `Minimap` — minimap camera + display
+- `Directional Light`, `Global Volume`, `Ground`, `SpawnPoints` — environment
 
-### Enemy Systems
-- [x] EnemyExtension — loads EnemyDataSO, hooks onDead for wave tracking
-- [x] EnemyStatusEffects — burn DoT (with NavMesh guard), stun (uses Invector TriggerReaction)
-- [x] ElementalDamageProcessor — per-enemy element resistance, triggers status effects + poise
-- [x] EnemyPoiseSystem — hidden stagger gauge (Lightning +20, Fire +5, break = stagger)
-- [x] AttackQueueManager — limits 2-3 simultaneous attackers
+## SCRIPTABLE OBJECT ASSETS
+All at `Assets/ScriptableObjects/`:
+- `ElementData/` — Fire_Data.asset, Lightning_Data.asset
+- `EnemyData/` — HollowMonk_Data (HP=60), ShadowAcolyte_Data (HP=40), StoneSentinel_Data (HP=120), FallenGuardian_Data (HP=500)
+- `WaveData/` — Level1_Waves.asset (no longer used — WaveManager generates internally)
+- `Events/` — OnEnemyKilled, OnPlayerDied, OnVictory, OnWaveStart, OnWaveClear, OnElementChanged, OnDamageDealt
 
-### Enemy AI Behaviors
-- [x] ShadowAcolyteBehavior — sprint in, 2-hit combo, retreat 6m, circle, re-engage
-- [x] StoneSentinelBehavior — slow tank, blocks 40%, 50% light attack reduction, heavy hits
+## ENEMY PREFABS
+At `Assets/Prefabs/Enemies/`:
+- `HollowMonk_Prefab.prefab` — Basic gooner (used for basicEnemyPrefab)
+- `ShadowAcolyte_Prefab.prefab` — Fast ninja (used for fastEnemyPrefab)
+- `StoneSentinel_Prefab.prefab` — Tank (used for heavyEnemyPrefab)
+All are clones of same Invector AI model — differentiated by behavior scripts added at spawn time
 
-### Wave System
-- [x] WaveManager — 10 waves, enemy count doubles (3→6→12→24...), max 10 on screen, continuous trickle spawn
-- [x] Wave composition: W1-2 pure basic, W3+ tanks (wave# count), W5+ elemental ninjas (wave# count), rest basic
-- [x] SpawnPointManager — spawns 5-10m around player, NavMesh snap
-- [x] ForceAggroPlayer — SetCurrentTarget on spawn for instant aggro
-- [x] Enemy prefabs (HollowMonk, ShadowAcolyte, StoneSentinel) created and wired
+## WAVE COMPOSITION (WaveManager.cs)
+- Wave 1-2: pure basic gooners
+- Wave 3+: guaranteed (wave#) tanks + rest basic
+- Wave 5+: guaranteed (wave#) elemental ninjas + tanks + rest basic
+- Enemy count doubles per wave: 3, 6, 12, 24, 48, 96, 192, 200, 200, 200
+- Max 10 on screen at once
 
-### UI/HUD
-- [x] ScorpionHUD — runtime-generated, bold text + shadows
-- [x] Adrenaline bar (pulses yellow when full, "ULTIMATE READY" label)
-- [x] MP bar (bottom-left, element-colored, labeled "MP")
-- [x] Element indicator (FIRE/LIGHTNING with color)
-- [x] Ability cooldowns (bottom-right, [F] and [R] with names/timers)
-- [x] Style rank (top-right, D→S with colors, S = rainbow)
-- [x] Wave counter (under minimap)
-- [x] Wave announcement — center screen fade-in/out with scale punch ("WAVE 1", "FINAL WAVE" in red)
-- [x] Combo counter — right-of-center, shows "5x MP +100%", pulses, color shifts
-- [x] Invector watermark hidden
-- [x] MinimapController — top-right, top-down orthographic camera, green player dot
+## DAMAGE BALANCE
+| Source | Damage |
+|--------|--------|
+| Melee (Invector) | ~10/hit |
+| Projectile (C) | 5 |
+| Fire Tornado (F) | 8/tick × 3s |
+| Lightning Burst (F) | 10 AoE |
+| Fire Aura burn (R) | 3/tick |
+| Ultimate burst Fire | 30 |
+| Ultimate burst Lightning | 20 + 2s stun |
 
-### Data Assets (ScriptableObjects)
-- [x] Fire_Data, Lightning_Data (rebalanced: tornado 8/tick, burst 10, burst ultimate 30/20)
-- [x] HollowMonk (HP=60), ShadowAcolyte (HP=40), StoneSentinel (HP=120), FallenGuardian (HP=500)
-- [x] Level1_Waves, all event channels
+## TODO — NEXT SESSION PRIORITIES
 
-### Damage Rebalance (applied)
-- Melee ~10/hit, Projectile 5, Fire Tornado 8/tick, Lightning Burst 10, Fire Burst 30, Lightning Burst 20
-- Monk HP=60, Acolyte HP=40, Sentinel HP=120, Boss HP=500
+### 1. HUD Elements (add to ScorpionHUD.cs incrementally)
+- [ ] Fix wave announcement (code exists but may not trigger visually)
+- [ ] Wave counter persistent text (top-center after announcement shrinks)
+- [ ] Round minimap (add circular mask to MinimapController)
+- [ ] Combo counter under minimap (3+ hits, shows "5x COMBO")
+- [ ] Adrenaline bar (bottom-center)
+- [ ] MP/Energy bar
+- [ ] Element indicator
+- [ ] Ability cooldowns
 
----
+### 2. Enemy Types
+- [ ] Elemental Ninja (throws projectiles, buffs allies, heals tanks)
+- [ ] Different Mixamo models per enemy type (user will provide FBX files)
 
-## TODO
+### 3. Boss AI
+- [ ] BossController + BossPhaseManager
+- [ ] Phase 1 (100-60%): sword combos + summon monks
+- [ ] Phase 2 (60-30%): fire aura + summon acolytes
+- [ ] Phase 3 (30-0%): enraged, no summons
 
-### Immediate Priority
-- [ ] Test wave progression end-to-end (W1→W10)
-- [ ] Fix any remaining NavMesh spawn issues
-- [ ] Elemental Ninja enemy type (projectile-throwing, buff allies, heal tanks)
-
-### Boss AI (Day 4)
-- [ ] BossController.cs — 3-phase Fallen Guardian
-- [ ] BossPhaseManager.cs — HP threshold transitions (100-60%, 60-30%, 30-0%)
-- [ ] Phase 1: sword combos + summon 2 monks every 30s
-- [ ] Phase 2: fire aura + ground slam fire wave + summon acolyte every 20s
-- [ ] Phase 3: enraged +30% speed/damage, 360° spin slash, no summons
-- [ ] BossHealthBarUI
-
-### Game Flow
+### 4. Game Flow
 - [ ] Pause menu (Esc)
-- [ ] Game Over screen (player death)
-- [ ] Victory screen (all waves cleared)
-- [ ] Restart functionality
+- [ ] Game Over screen
+- [ ] Victory screen
 
-### Polish (Day 5-6)
-- [ ] Damage numbers popup
-- [ ] Hit stop (frame freeze on heavy hits)
+### 5. Polish
+- [ ] Damage numbers
+- [ ] Hit stop
 - [ ] Weapon trails
-- [ ] Post-processing effects during Ultimate
-- [ ] Sound effects
-- [ ] Full playtest + build
 
----
+## CRITICAL RULES
+- **NEVER modify** `Assets/Invector-3rdPersonController/` files
+- **Read research docs on-demand** from `docs/research/` — don't bulk-read
+- **Update this DEV_LOG.md after every response**
+- **Use MCP Unity** for scene/component changes, not manual editor
+- **Invector HUD** is kept running — add custom elements as overlay, don't hide/disable it
+- **Test step by step** — compile, play, verify, then next step
 
-## Session History
+## SESSION HISTORY
 
 ### Session 1 — 2026-03-25
-- Recovered context, created DEV_LOG.md
-- Fixed camera (CameraRigidbodyFix), ZZZ style values
-- Built Day 3 enemy/wave scripts, wired scene
-- DamageInterceptor overhaul, UltimateSystem fix, ScorpionHUD created
+- Created DEV_LOG.md, fixed camera, built Day 3 scripts, wired scene
 
-### Session 2 — 2026-03-27/28 (Current)
-- Fixed ability VFX (removed broken Invector particles, code-generated fire/lightning particles)
-- Fixed HUD font crash (Arial→LegacyRuntime), bar positioning, Invector watermark removal
-- Redesigned wave system: doubling enemy count, max 10 on screen, trickle spawn
-- Fixed wave tracking (integer counter instead of GameObject list)
-- Spawn near player (5-10m circle) + ForceAggroPlayer
-- Added minimap (top-right, orthographic camera)
-- Wave announcement (center screen fade-in/out)
-- Built ShadowAcolyteBehavior (hit-and-run) and StoneSentinelBehavior (tank)
-- Wave composition: W1-2 basic, W3+ tanks, W5+ elemental ninjas
-- Ultimate VFX overhaul: activation flash/particles, golden aura during, elemental burst VFX + heavy shake
-- Damage rebalance: enemy HP doubled, ability damage halved
-- Stamina: melee attacks free, only sprint/dodge drain
-- MP bar + combo counter with regen bonus display
-- Pushed to GitHub
+### Session 2 — 2026-03-27/28
+- Ability VFX (code-generated fire/lightning particles)
+- HUD font fix (LegacyRuntime), Invector watermark deleted
+- Wave system redesign (doubling, max 10, trickle spawn)
+- Wave tracking fix (integer counter, not GameObject list)
+- Spawn near player + ForceAggroPlayer
+- Minimap, wave announcement, combo counter, MP bar (various attempts)
+- ShadowAcolyte + StoneSentinel behaviors
+- Ultimate VFX overhaul
+- Damage rebalance
+- StaminaFix (melee = 0 stamina)
+- HUD: tried custom HP bar (didn't work with Invector), reverted to Invector HUD
+- Fixed RequireComponent error, dead body cleanup
+- Wave system CONFIRMED WORKING: spawn → fight → kill → wave cleared → next wave
 
----
-
-## Known Issues / BUGS TO FIX NEXT SESSION
-- **Wave progression not working** — enemies spawn but `OnEnemyDied()` never fires. No kill logs appear. Either `onDead` listener not connecting to spawned clones, or enemies aren't actually dying. CRITICAL — debug this first.
-- **Wave announcement not appearing** — HUD code is correct but may not trigger if WaveManager.CurrentWave doesn't change (tied to wave bug above)
-- **Minimap still square** — needs circular mask on the RawImage
-- **StaminaFix found 0 weapons** — weapons may load via Invector inventory system later. InvokeRepeating handles it but needs verification.
-- **"The referenced script (Unknown)" warning** — orphaned component reference on player
-- **All 3 enemy prefabs look identical** — same 3D model, differentiated only by behavior scripts and stats
-- **HUD approach decided**: Keep Invector's HUD for HP/Stamina (it works). Add custom elements as overlay. Invector watermark logo deleted from scene.
-- Invector deprecation warnings (FindObjectsSortMode etc) — harmless
-
-## NEXT SESSION PRIORITIES
-1. Debug wave system — why aren't enemy kills registering? Add logging to SpawnEnemy and verify onDead hooks
-2. Fix wave announcement display
-3. Make minimap round
-4. Add combo counter under minimap
-5. Add adrenaline bar bottom center
-6. Continue enemy AI differentiation
+## KNOWN ISSUES
+- "The referenced script (Unknown)" warning — orphaned component on player, harmless
+- Invector deprecation warnings — harmless
+- StaminaFix finds 0 weapons at start (InvokeRepeating checks every 2s)
+- All enemy prefabs look identical (same 3D model) — waiting for Mixamo models
