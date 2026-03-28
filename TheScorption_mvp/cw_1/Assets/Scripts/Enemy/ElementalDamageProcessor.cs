@@ -8,7 +8,6 @@ namespace TheScorpion.Enemy
     /// Sits on each enemy. Hooks into vHealthController.onStartReceiveDamage to apply
     /// element resistance modifiers and trigger status effects (burn, stun) via EnemyStatusEffects.
     /// </summary>
-    [RequireComponent(typeof(EnemyStatusEffects))]
     public class ElementalDamageProcessor : MonoBehaviour
     {
         [Header("Burn Settings")]

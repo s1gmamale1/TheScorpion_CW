@@ -287,10 +287,14 @@ namespace TheScorpion.Systems
             // Force AI to aggro player immediately
             ForceAggroPlayer(enemy);
 
-            // Hook death for tracking
+            // Hook death for tracking + cleanup
             var health = enemy.GetComponent<Invector.vHealthController>();
             if (health != null)
-                health.onDead.AddListener((deadObj) => OnEnemyDied());
+            {
+                var enemyRef = enemy; // capture for closure
+                health.onDead.AddListener((deadObj) => OnEnemyDied(enemyRef));
+                Debug.Log($"[Wave] Spawned {enemy.name} | HP: {health.currentHealth}/{health.MaxHealth} | onDead hooked");
+            }
 
             aliveCount++;
         }
@@ -308,12 +312,33 @@ namespace TheScorpion.Systems
             }
         }
 
-        private void OnEnemyDied()
+        private List<GameObject> deadBodies = new List<GameObject>();
+        private const int MAX_DEAD_BODIES = 5;
+        private const float BODY_DESTROY_DELAY = 5f;
+
+        private void OnEnemyDied(GameObject enemy)
         {
             aliveCount = Mathf.Max(0, aliveCount - 1);
             enemiesKilledThisWave++;
 
-            Debug.Log($"[Scorpion] Enemy killed! {enemiesKilledThisWave}/{totalEnemiesThisWave} | Alive: {aliveCount}");
+            Debug.Log($"[Wave] KILL! {enemiesKilledThisWave}/{totalEnemiesThisWave} | Alive: {aliveCount}");
+
+            // Dead body management — keep max 5 corpses
+            if (enemy != null)
+            {
+                deadBodies.Add(enemy);
+
+                // Remove oldest if over limit
+                while (deadBodies.Count > MAX_DEAD_BODIES)
+                {
+                    var oldest = deadBodies[0];
+                    deadBodies.RemoveAt(0);
+                    if (oldest != null) Destroy(oldest);
+                }
+
+                // Also auto-destroy this body after delay
+                Destroy(enemy, BODY_DESTROY_DELAY);
+            }
 
             if (enemiesKilledThisWave >= totalEnemiesThisWave && waveInProgress)
             {
@@ -321,7 +346,7 @@ namespace TheScorpion.Systems
                 if (spawnCoroutine != null)
                     StopCoroutine(spawnCoroutine);
 
-                Debug.Log($"[Scorpion] Wave {currentWaveIndex} CLEARED!");
+                Debug.Log($"[Wave] Wave {currentWaveIndex} CLEARED!");
                 StartCoroutine(StartWaveAfterDelay(delayBetweenWaves));
             }
         }
