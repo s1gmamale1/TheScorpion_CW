@@ -93,9 +93,10 @@ All are clones of same Invector AI model — differentiated by behavior scripts 
 
 ## WAVE COMPOSITION (WaveManager.cs)
 - Wave 1-2: pure basic gooners
-- Wave 3+: guaranteed (wave#) tanks + rest basic
-- Wave 5+: guaranteed (wave#) elemental ninjas + tanks + rest basic
-- Enemy count doubles per wave: 3, 6, 12, 24, 48, 96, 192, 200, 200, 200
+- Wave 3+: 1 tank + 1 more per 2 waves (wave 3=1, 5=2, 7=3, 10=4)
+- Wave 5+: 1 ninja + 1 more per 2 waves (wave 5=1, 7=2, 9=3, 10=3)
+- Rest filled with basic gooners
+- Enemy count: +2 per wave: 3, 5, 7, 9, 11, 13, 15, 17, 19, 21
 - Max 10 on screen at once
 
 ## DAMAGE BALANCE
@@ -185,6 +186,9 @@ All are clones of same Invector AI model — differentiated by behavior scripts 
 - PlayerDeathHandler: cleaned up — removed manual Esc restart, HUD handles it now
 - ScorpionInputHandler: blocks all input during PreGame state
 - Compiled successfully (0 errors, warnings are all Invector deprecation)
+- Changed wave progression: +2 per wave (3,5,7,...,21) instead of doubling
+- Scaled down guaranteed tank/ninja counts to match smaller waves
+- Added MP/Energy bar to HUD (bottom-left, blue fill bar, reads from ElementSystem)
 - NEEDS TESTING: wire onEnemyKilledEvent to GameManager in Inspector
 
 ## KNOWN ISSUES

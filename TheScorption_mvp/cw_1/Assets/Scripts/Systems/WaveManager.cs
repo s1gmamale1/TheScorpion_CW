@@ -118,10 +118,9 @@ namespace TheScorpion.Systems
 
         private int GetWaveEnemyCount(int wave)
         {
-            // Wave 1: 3, Wave 2: 6, Wave 3: 12, Wave 4: 24, Wave 5: 48...
-            // Cap at reasonable numbers for 20-30 min gameplay
-            int count = startingEnemies * (1 << (wave - 1)); // doubles each wave
-            return Mathf.Min(count, 200); // safety cap
+            // Wave 1: 3, Wave 2: 5, Wave 3: 7, Wave 4: 9, ... (+2 per wave)
+            int count = startingEnemies + (wave - 1) * 2;
+            return count;
         }
 
         private IEnumerator ContinuousSpawnLoop()
@@ -162,11 +161,11 @@ namespace TheScorpion.Systems
             if (currentWaveIndex >= totalWaves && bossPrefab != null)
                 return (bossPrefab, bossData);
 
-            // Wave 3+: guaranteed tanks — 3 base + 1 per wave after 3
-            // Wave 3=3, Wave 4=4, Wave 5=5, ... Wave 10=10
+            // Wave 3+: guaranteed 1 tank + 1 more per 2 waves
+            // Wave 3=1, Wave 4=1, Wave 5=2, Wave 6=2, Wave 7=3, ... Wave 10=4
             if (currentWaveIndex >= 3)
             {
-                int minSentinels = currentWaveIndex;
+                int minSentinels = 1 + (currentWaveIndex - 3) / 2;
                 if (sentinelsSpawnedThisWave < minSentinels && heavyEnemyPrefab != null)
                 {
                     sentinelsSpawnedThisWave++;
@@ -174,11 +173,11 @@ namespace TheScorpion.Systems
                 }
             }
 
-            // Wave 5+: guaranteed elemental ninjas — 5 base + 1 per wave after 5
-            // Wave 5=5, Wave 6=6, Wave 7=7, ... Wave 10=10
+            // Wave 5+: guaranteed 1 ninja + 1 more per 2 waves
+            // Wave 5=1, Wave 6=1, Wave 7=2, Wave 8=2, Wave 9=3, Wave 10=3
             if (currentWaveIndex >= 5)
             {
-                int minElemental = currentWaveIndex;
+                int minElemental = 1 + (currentWaveIndex - 5) / 2;
                 if (elementalSpawnedThisWave < minElemental && fastEnemyPrefab != null)
                 {
                     elementalSpawnedThisWave++;
@@ -288,6 +287,14 @@ namespace TheScorpion.Systems
                             enemy.AddComponent<StoneSentinelBehavior>();
                         break;
                 }
+            }
+
+            // Make enemies only hit the Player, not each other
+            var meleeManager = enemy.GetComponent<Invector.vMelee.vMeleeManager>();
+            if (meleeManager != null)
+            {
+                meleeManager.hitProperties.hitDamageTags.Clear();
+                meleeManager.hitProperties.hitDamageTags.Add("Player");
             }
 
             // Force AI to aggro player immediately

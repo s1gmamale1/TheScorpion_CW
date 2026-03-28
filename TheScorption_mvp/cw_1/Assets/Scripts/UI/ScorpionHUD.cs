@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TheScorpion.Core;
 using TheScorpion.Systems;
+using TheScorpion.Player;
 
 namespace TheScorpion.UI
 {
@@ -25,6 +26,8 @@ namespace TheScorpion.UI
         // Game Over / Victory stats
         private Text gameOverWaveText, gameOverKillsText, gameOverTimeText;
         private Text victoryKillsText, victoryTimeText;
+
+        private ElementSystem elementSystem;
 
         private void Start()
         {
@@ -64,7 +67,6 @@ namespace TheScorpion.UI
             gameOverPanel.SetActive(state == GameState.GameOver);
             victoryPanel.SetActive(state == GameState.Victory);
 
-            // Update stats text on game over / victory
             if (state == GameState.GameOver)
             {
                 int wave = WaveManager.Instance != null ? WaveManager.Instance.CurrentWave : 0;
@@ -115,21 +117,17 @@ namespace TheScorpion.UI
         {
             startPanel = CreatePanel("StartPanel");
 
-            // Dark overlay
             var bg = startPanel.GetComponent<Image>();
             bg.color = new Color(0, 0, 0, 0.85f);
 
-            // Title
             MakeText(startPanel.transform, "Title",
                 new Vector2(0.5f, 0.5f), new Vector2(0, 120), new Vector2(700, 100),
                 "THE SCORPION", 72, TextAnchor.MiddleCenter, new Color(1f, 0.85f, 0.2f));
 
-            // Subtitle
             MakeText(startPanel.transform, "Subtitle",
                 new Vector2(0.5f, 0.5f), new Vector2(0, 55), new Vector2(500, 30),
                 "Blade of Fire and Lightning", 20, TextAnchor.MiddleCenter, new Color(0.7f, 0.7f, 0.7f));
 
-            // Start button
             CreateButton(startPanel.transform, "StartBtn",
                 new Vector2(0, -30), new Vector2(260, 55),
                 "START GAME", new Color(0.9f, 0.6f, 0.1f), () =>
@@ -140,7 +138,6 @@ namespace TheScorpion.UI
                         WaveManager.Instance.StartFirstWave();
                 });
 
-            // Quit button
             CreateButton(startPanel.transform, "QuitBtn",
                 new Vector2(0, -100), new Vector2(260, 55),
                 "QUIT", new Color(0.4f, 0.4f, 0.4f), () =>
@@ -151,7 +148,6 @@ namespace TheScorpion.UI
                     #endif
                 });
 
-            // Controls hint
             MakeText(startPanel.transform, "Controls",
                 new Vector2(0.5f, 0.5f), new Vector2(0, -200), new Vector2(600, 120),
                 "WASD — Move    Mouse — Look    LMB — Attack    Space — Jump\n" +
@@ -311,6 +307,15 @@ namespace TheScorpion.UI
 
         private void Update()
         {
+            // Lazy find player + create energy bar
+            if (elementSystem == null)
+            {
+                var player = GameObject.FindGameObjectWithTag("Player");
+                if (player != null)
+                    elementSystem = player.GetComponent<ElementSystem>();
+            }
+
+            // Wave announcement
             if (WaveManager.Instance != null)
             {
                 int w = WaveManager.Instance.CurrentWave;
@@ -363,7 +368,7 @@ namespace TheScorpion.UI
             r.anchorMax = Vector2.one;
             r.offsetMin = Vector2.zero;
             r.offsetMax = Vector2.zero;
-            go.AddComponent<Image>(); // background — caller sets color
+            go.AddComponent<Image>();
             return go;
         }
 
