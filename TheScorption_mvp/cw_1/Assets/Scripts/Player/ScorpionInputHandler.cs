@@ -21,7 +21,10 @@ namespace TheScorpion.Player
             // Don't process input if player is dead
             if (playerHealth != null && playerHealth.isDead) return;
 
-            // Pause handling works regardless
+            // No input during PreGame (start screen handles it)
+            if (GameManager.Instance != null && GameManager.Instance.CurrentState == GameState.PreGame) return;
+
+            // Pause handling works during Playing and Paused
             HandlePauseInput();
 
             if (GameManager.Instance != null && !GameManager.Instance.IsPlaying) return;

@@ -5,11 +5,6 @@ using TheScorpion.Systems;
 
 namespace TheScorpion.UI
 {
-    /// <summary>
-    /// Custom HUD overlay — keeps Invector's HUD for HP/Stamina (it works),
-    /// adds our custom elements on top: wave announcement, and future elements.
-    /// Built step by step.
-    /// </summary>
     public class ScorpionHUD : MonoBehaviour
     {
         private Canvas canvas;
@@ -19,12 +14,73 @@ namespace TheScorpion.UI
         private Text waveAnnounceLabel, waveAnnounceSubLabel;
         private CanvasGroup waveAnnounceGroup;
         private int lastWave;
+        private Coroutine _annCR;
+
+        // Panels
+        private GameObject startPanel;
+        private GameObject pausePanel;
+        private GameObject gameOverPanel;
+        private GameObject victoryPanel;
+
+        // Game Over / Victory stats
+        private Text gameOverWaveText, gameOverKillsText, gameOverTimeText;
+        private Text victoryKillsText, victoryTimeText;
 
         private void Start()
         {
             HideInvectorWatermark();
             CreateCanvas();
             CreateWaveAnnouncement();
+            CreateStartScreen();
+            CreatePauseMenu();
+            CreateGameOverScreen();
+            CreateVictoryScreen();
+
+            // Listen to state changes
+            if (GameManager.Instance != null)
+                GameManager.Instance.OnGameStateChanged += OnGameStateChanged;
+
+            // Show correct panel for initial state
+            RefreshPanels();
+        }
+
+        private void OnDestroy()
+        {
+            if (GameManager.Instance != null)
+                GameManager.Instance.OnGameStateChanged -= OnGameStateChanged;
+        }
+
+        private void OnGameStateChanged(GameState state)
+        {
+            RefreshPanels();
+        }
+
+        private void RefreshPanels()
+        {
+            var state = GameManager.Instance != null ? GameManager.Instance.CurrentState : GameState.PreGame;
+
+            startPanel.SetActive(state == GameState.PreGame);
+            pausePanel.SetActive(state == GameState.Paused);
+            gameOverPanel.SetActive(state == GameState.GameOver);
+            victoryPanel.SetActive(state == GameState.Victory);
+
+            // Update stats text on game over / victory
+            if (state == GameState.GameOver)
+            {
+                int wave = WaveManager.Instance != null ? WaveManager.Instance.CurrentWave : 0;
+                int kills = GameManager.Instance != null ? GameManager.Instance.TotalKills : 0;
+                string time = GameManager.Instance != null ? GameManager.Instance.GetFormattedTime() : "00:00";
+                gameOverWaveText.text = $"Wave Reached: {wave}";
+                gameOverKillsText.text = $"Enemies Slain: {kills}";
+                gameOverTimeText.text = $"Time: {time}";
+            }
+            else if (state == GameState.Victory)
+            {
+                int kills = GameManager.Instance != null ? GameManager.Instance.TotalKills : 0;
+                string time = GameManager.Instance != null ? GameManager.Instance.GetFormattedTime() : "00:00";
+                victoryKillsText.text = $"Enemies Slain: {kills}";
+                victoryTimeText.text = $"Time: {time}";
+            }
         }
 
         private void HideInvectorWatermark()
@@ -54,6 +110,185 @@ namespace TheScorpion.UI
             root = go.transform;
         }
 
+        // ==================== START SCREEN ====================
+        private void CreateStartScreen()
+        {
+            startPanel = CreatePanel("StartPanel");
+
+            // Dark overlay
+            var bg = startPanel.GetComponent<Image>();
+            bg.color = new Color(0, 0, 0, 0.85f);
+
+            // Title
+            MakeText(startPanel.transform, "Title",
+                new Vector2(0.5f, 0.5f), new Vector2(0, 120), new Vector2(700, 100),
+                "THE SCORPION", 72, TextAnchor.MiddleCenter, new Color(1f, 0.85f, 0.2f));
+
+            // Subtitle
+            MakeText(startPanel.transform, "Subtitle",
+                new Vector2(0.5f, 0.5f), new Vector2(0, 55), new Vector2(500, 30),
+                "Blade of Fire and Lightning", 20, TextAnchor.MiddleCenter, new Color(0.7f, 0.7f, 0.7f));
+
+            // Start button
+            CreateButton(startPanel.transform, "StartBtn",
+                new Vector2(0, -30), new Vector2(260, 55),
+                "START GAME", new Color(0.9f, 0.6f, 0.1f), () =>
+                {
+                    if (GameManager.Instance != null)
+                        GameManager.Instance.StartGame();
+                    if (WaveManager.Instance != null)
+                        WaveManager.Instance.StartFirstWave();
+                });
+
+            // Quit button
+            CreateButton(startPanel.transform, "QuitBtn",
+                new Vector2(0, -100), new Vector2(260, 55),
+                "QUIT", new Color(0.4f, 0.4f, 0.4f), () =>
+                {
+                    Application.Quit();
+                    #if UNITY_EDITOR
+                    UnityEditor.EditorApplication.isPlaying = false;
+                    #endif
+                });
+
+            // Controls hint
+            MakeText(startPanel.transform, "Controls",
+                new Vector2(0.5f, 0.5f), new Vector2(0, -200), new Vector2(600, 120),
+                "WASD — Move    Mouse — Look    LMB — Attack    Space — Jump\n" +
+                "Q/E — Switch Element    F — Ability 1    R — Ability 2\n" +
+                "C — Projectile    V — Ultimate    LCtrl — Dodge    Esc — Pause",
+                14, TextAnchor.MiddleCenter, new Color(0.5f, 0.5f, 0.5f));
+        }
+
+        // ==================== PAUSE MENU ====================
+        private void CreatePauseMenu()
+        {
+            pausePanel = CreatePanel("PausePanel");
+            pausePanel.SetActive(false);
+
+            var bg = pausePanel.GetComponent<Image>();
+            bg.color = new Color(0, 0, 0, 0.7f);
+
+            MakeText(pausePanel.transform, "Title",
+                new Vector2(0.5f, 0.5f), new Vector2(0, 100), new Vector2(400, 80),
+                "PAUSED", 60, TextAnchor.MiddleCenter, Color.white);
+
+            CreateButton(pausePanel.transform, "ResumeBtn",
+                new Vector2(0, 10), new Vector2(260, 55),
+                "RESUME", new Color(0.2f, 0.7f, 0.3f), () =>
+                {
+                    if (GameManager.Instance != null)
+                        GameManager.Instance.TogglePause();
+                });
+
+            CreateButton(pausePanel.transform, "RestartBtn",
+                new Vector2(0, -60), new Vector2(260, 55),
+                "RESTART", new Color(0.9f, 0.6f, 0.1f), () =>
+                {
+                    if (GameManager.Instance != null)
+                        GameManager.Instance.RestartGame();
+                });
+
+            CreateButton(pausePanel.transform, "QuitBtn",
+                new Vector2(0, -130), new Vector2(260, 55),
+                "QUIT", new Color(0.6f, 0.2f, 0.2f), () =>
+                {
+                    Application.Quit();
+                    #if UNITY_EDITOR
+                    UnityEditor.EditorApplication.isPlaying = false;
+                    #endif
+                });
+        }
+
+        // ==================== GAME OVER SCREEN ====================
+        private void CreateGameOverScreen()
+        {
+            gameOverPanel = CreatePanel("GameOverPanel");
+            gameOverPanel.SetActive(false);
+
+            var bg = gameOverPanel.GetComponent<Image>();
+            bg.color = new Color(0.15f, 0, 0, 0.85f);
+
+            MakeText(gameOverPanel.transform, "Title",
+                new Vector2(0.5f, 0.5f), new Vector2(0, 130), new Vector2(500, 80),
+                "DEFEATED", 68, TextAnchor.MiddleCenter, new Color(0.8f, 0.15f, 0.1f));
+
+            gameOverWaveText = MakeText(gameOverPanel.transform, "Wave",
+                new Vector2(0.5f, 0.5f), new Vector2(0, 50), new Vector2(400, 35),
+                "Wave Reached: 0", 24, TextAnchor.MiddleCenter, new Color(0.8f, 0.8f, 0.8f));
+
+            gameOverKillsText = MakeText(gameOverPanel.transform, "Kills",
+                new Vector2(0.5f, 0.5f), new Vector2(0, 15), new Vector2(400, 35),
+                "Enemies Slain: 0", 24, TextAnchor.MiddleCenter, new Color(0.8f, 0.8f, 0.8f));
+
+            gameOverTimeText = MakeText(gameOverPanel.transform, "Time",
+                new Vector2(0.5f, 0.5f), new Vector2(0, -20), new Vector2(400, 35),
+                "Time: 00:00", 24, TextAnchor.MiddleCenter, new Color(0.8f, 0.8f, 0.8f));
+
+            CreateButton(gameOverPanel.transform, "RestartBtn",
+                new Vector2(0, -85), new Vector2(260, 55),
+                "TRY AGAIN", new Color(0.9f, 0.6f, 0.1f), () =>
+                {
+                    if (GameManager.Instance != null)
+                        GameManager.Instance.RestartGame();
+                });
+
+            CreateButton(gameOverPanel.transform, "QuitBtn",
+                new Vector2(0, -155), new Vector2(260, 55),
+                "QUIT", new Color(0.4f, 0.4f, 0.4f), () =>
+                {
+                    Application.Quit();
+                    #if UNITY_EDITOR
+                    UnityEditor.EditorApplication.isPlaying = false;
+                    #endif
+                });
+        }
+
+        // ==================== VICTORY SCREEN ====================
+        private void CreateVictoryScreen()
+        {
+            victoryPanel = CreatePanel("VictoryPanel");
+            victoryPanel.SetActive(false);
+
+            var bg = victoryPanel.GetComponent<Image>();
+            bg.color = new Color(0, 0.05f, 0.1f, 0.85f);
+
+            MakeText(victoryPanel.transform, "Title",
+                new Vector2(0.5f, 0.5f), new Vector2(0, 130), new Vector2(600, 80),
+                "VICTORY", 72, TextAnchor.MiddleCenter, new Color(1f, 0.85f, 0.2f));
+
+            MakeText(victoryPanel.transform, "Subtitle",
+                new Vector2(0.5f, 0.5f), new Vector2(0, 70), new Vector2(500, 30),
+                "The arena has been conquered", 20, TextAnchor.MiddleCenter, new Color(0.7f, 0.8f, 0.9f));
+
+            victoryKillsText = MakeText(victoryPanel.transform, "Kills",
+                new Vector2(0.5f, 0.5f), new Vector2(0, 20), new Vector2(400, 35),
+                "Enemies Slain: 0", 24, TextAnchor.MiddleCenter, Color.white);
+
+            victoryTimeText = MakeText(victoryPanel.transform, "Time",
+                new Vector2(0.5f, 0.5f), new Vector2(0, -15), new Vector2(400, 35),
+                "Time: 00:00", 24, TextAnchor.MiddleCenter, Color.white);
+
+            CreateButton(victoryPanel.transform, "RestartBtn",
+                new Vector2(0, -80), new Vector2(260, 55),
+                "PLAY AGAIN", new Color(0.2f, 0.7f, 0.3f), () =>
+                {
+                    if (GameManager.Instance != null)
+                        GameManager.Instance.RestartGame();
+                });
+
+            CreateButton(victoryPanel.transform, "QuitBtn",
+                new Vector2(0, -150), new Vector2(260, 55),
+                "QUIT", new Color(0.4f, 0.4f, 0.4f), () =>
+                {
+                    Application.Quit();
+                    #if UNITY_EDITOR
+                    UnityEditor.EditorApplication.isPlaying = false;
+                    #endif
+                });
+        }
+
+        // ==================== WAVE ANNOUNCEMENT ====================
         private void CreateWaveAnnouncement()
         {
             var annGO = new GameObject("WaveAnnounce");
@@ -89,8 +324,6 @@ namespace TheScorpion.UI
             }
         }
 
-        private Coroutine _annCR;
-
         private System.Collections.IEnumerator AnnounceWave(int w, int t)
         {
             bool isFinal = w >= t;
@@ -98,7 +331,6 @@ namespace TheScorpion.UI
             waveAnnounceLabel.color = isFinal ? new Color(1f, 0.25f, 0.15f) : Color.white;
             waveAnnounceSubLabel.text = isFinal ? "Defeat the guardian" : "Eliminate all enemies";
 
-            // Fade in with scale punch
             float fade = 0.4f;
             for (float f = 0; f < fade; f += Time.unscaledDeltaTime)
             {
@@ -112,7 +344,6 @@ namespace TheScorpion.UI
 
             yield return new WaitForSecondsRealtime(2.2f);
 
-            // Fade out
             for (float f = 0; f < fade; f += Time.unscaledDeltaTime)
             {
                 waveAnnounceGroup.alpha = 1f - f / fade;
@@ -121,7 +352,51 @@ namespace TheScorpion.UI
             waveAnnounceGroup.alpha = 0f;
         }
 
-        // ==================== FACTORY ====================
+        // ==================== FACTORIES ====================
+
+        private GameObject CreatePanel(string name)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(root, false);
+            var r = go.AddComponent<RectTransform>();
+            r.anchorMin = Vector2.zero;
+            r.anchorMax = Vector2.one;
+            r.offsetMin = Vector2.zero;
+            r.offsetMax = Vector2.zero;
+            go.AddComponent<Image>(); // background — caller sets color
+            return go;
+        }
+
+        private void CreateButton(Transform parent, string name, Vector2 pos, Vector2 size,
+            string label, Color bgColor, UnityEngine.Events.UnityAction onClick)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var r = go.AddComponent<RectTransform>();
+            r.anchorMin = r.anchorMax = new Vector2(0.5f, 0.5f);
+            r.pivot = new Vector2(0.5f, 0.5f);
+            r.anchoredPosition = pos;
+            r.sizeDelta = size;
+
+            var img = go.AddComponent<Image>();
+            img.color = bgColor;
+
+            var btn = go.AddComponent<Button>();
+            var colors = btn.colors;
+            colors.normalColor = bgColor;
+            colors.highlightedColor = new Color(
+                Mathf.Min(bgColor.r + 0.15f, 1f),
+                Mathf.Min(bgColor.g + 0.15f, 1f),
+                Mathf.Min(bgColor.b + 0.15f, 1f), 1f);
+            colors.pressedColor = new Color(bgColor.r * 0.7f, bgColor.g * 0.7f, bgColor.b * 0.7f, 1f);
+            btn.colors = colors;
+            btn.onClick.AddListener(onClick);
+
+            MakeText(go.transform, "Label",
+                new Vector2(0.5f, 0.5f), Vector2.zero, size,
+                label, 22, TextAnchor.MiddleCenter, Color.white);
+        }
+
         private Text MakeText(Transform parent, string name, Vector2 anchor,
             Vector2 pos, Vector2 size, string text, int fontSize, TextAnchor align, Color color)
         {

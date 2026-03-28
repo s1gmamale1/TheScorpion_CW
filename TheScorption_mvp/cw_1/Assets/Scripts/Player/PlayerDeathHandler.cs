@@ -29,30 +29,6 @@ namespace TheScorpion.Player
 
             if (onPlayerDiedEvent != null)
                 onPlayerDiedEvent.RaiseEvent();
-
-            // Freeze the game after a short delay
-            Invoke(nameof(FreezeGame), 2f);
-        }
-
-        private void FreezeGame()
-        {
-            Time.timeScale = 0f;
-            Debug.Log("[Scorpion] Game frozen. Press Escape to restart.");
-        }
-
-        private void Update()
-        {
-            // Allow restart when dead
-            if (healthController != null && healthController.isDead)
-            {
-                if (Input.GetKeyDown(KeyCode.Escape))
-                {
-                    Time.timeScale = 1f;
-                    Time.fixedDeltaTime = 0.02f;
-                    UnityEngine.SceneManagement.SceneManager.LoadScene(
-                        UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
-                }
-            }
         }
     }
 }

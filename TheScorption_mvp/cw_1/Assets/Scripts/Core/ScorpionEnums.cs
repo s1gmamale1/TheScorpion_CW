@@ -9,6 +9,7 @@ namespace TheScorpion.Core
 
     public enum GameState
     {
+        PreGame,
         Playing,
         Paused,
         GameOver,

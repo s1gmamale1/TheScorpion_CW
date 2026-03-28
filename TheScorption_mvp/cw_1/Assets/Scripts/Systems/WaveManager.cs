@@ -42,7 +42,7 @@ namespace TheScorpion.Systems
         [SerializeField] private int maxOnScreen = 10;
         [SerializeField] private float spawnInterval = 1.5f;
         [SerializeField] private float delayBetweenWaves = 3f;
-        [SerializeField] private bool autoStartWaves = true;
+        [SerializeField] private bool autoStartWaves = false;
 
         // State
         private int currentWaveIndex = 0;
@@ -57,6 +57,12 @@ namespace TheScorpion.Systems
         public int TotalWaves => totalWaves;
         public int EnemiesAlive => aliveCount;
         public bool IsWaveInProgress => waveInProgress;
+        public int TotalKillsAllWaves { get; private set; }
+
+        public void StartFirstWave()
+        {
+            StartCoroutine(StartWaveAfterDelay(delayBetweenWaves));
+        }
 
         private void Awake()
         {
@@ -320,6 +326,7 @@ namespace TheScorpion.Systems
         {
             aliveCount = Mathf.Max(0, aliveCount - 1);
             enemiesKilledThisWave++;
+            TotalKillsAllWaves++;
 
             Debug.Log($"[Wave] KILL! {enemiesKilledThisWave}/{totalEnemiesThisWave} | Alive: {aliveCount}");
 

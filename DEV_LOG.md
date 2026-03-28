@@ -33,11 +33,15 @@
 - Invector watermark logo: DELETED from scene
 
 ## CUSTOM HUD STATE (ScorpionHUD.cs)
-Currently minimal — only has:
-- Wave announcement (code exists, triggers on wave change, but NEEDS TESTING — may not show visually)
+- Wave announcement (fade in/out on wave change)
+- Start screen panel (PreGame state — title, start button, controls, quit)
+- Pause menu panel (Esc — resume, restart, quit)
+- Game Over panel (DEFEATED — stats + try again/quit)
+- Victory panel (VICTORY — stats + play again/quit)
 - Invector watermark text hiding
 - Invector HUD is NOT hidden (it's running and showing HP/stamina)
 - Our canvas sits on top at sortingOrder 10
+- All panels code-generated, no prefabs needed
 
 ## KEY FILES TO KNOW
 | File | What it does |
@@ -108,7 +112,6 @@ All are clones of same Invector AI model — differentiated by behavior scripts 
 ## TODO — NEXT SESSION PRIORITIES
 
 ### 1. HUD Elements (add to ScorpionHUD.cs incrementally)
-- [ ] Fix wave announcement (code exists but may not trigger visually)
 - [ ] Wave counter persistent text (top-center after announcement shrinks)
 - [ ] Round minimap (add circular mask to MinimapController)
 - [ ] Combo counter under minimap (3+ hits, shows "5x COMBO")
@@ -116,6 +119,7 @@ All are clones of same Invector AI model — differentiated by behavior scripts 
 - [ ] MP/Energy bar
 - [ ] Element indicator
 - [ ] Ability cooldowns
+- [ ] Style rank display
 
 ### 2. Enemy Types
 - [ ] Elemental Ninja (throws projectiles, buffs allies, heals tanks)
@@ -128,9 +132,13 @@ All are clones of same Invector AI model — differentiated by behavior scripts 
 - [ ] Phase 3 (30-0%): enraged, no summons
 
 ### 4. Game Flow
-- [ ] Pause menu (Esc)
-- [ ] Game Over screen
-- [ ] Victory screen
+- [x] Start screen (PreGame state, START GAME button, controls hint, QUIT)
+- [x] Pause menu (Esc → PAUSED overlay, Resume/Restart/Quit buttons, cursor shown)
+- [x] Game Over screen (DEFEATED + wave/kills/time stats, TRY AGAIN/QUIT)
+- [x] Victory screen (VICTORY + kills/time stats, PLAY AGAIN/QUIT)
+- [x] Cursor management (shown on menus, hidden during gameplay)
+- [x] GameManager state machine (PreGame→Playing→Paused/GameOver/Victory)
+- [x] Kill + time tracking for stats display
 
 ### 5. Polish
 - [ ] Damage numbers
@@ -164,6 +172,20 @@ All are clones of same Invector AI model — differentiated by behavior scripts 
 - HUD: tried custom HP bar (didn't work with Invector), reverted to Invector HUD
 - Fixed RequireComponent error, dead body cleanup
 - Wave system CONFIRMED WORKING: spawn → fight → kill → wave cleared → next wave
+
+### Session 3 — 2026-03-28
+- Added PreGame state to GameState enum
+- Rebuilt GameManager: state machine with enter/exit, cursor management, kill/time stats, OnGameStateChanged event
+- Built 4 UI panels in ScorpionHUD (all code-generated, no prefabs):
+  - Start screen: title + subtitle + START GAME button + controls hint + QUIT
+  - Pause menu: PAUSED + Resume/Restart/Quit buttons
+  - Game Over: DEFEATED + wave/kills/time stats + TRY AGAIN/QUIT
+  - Victory: VICTORY + kills/time stats + PLAY AGAIN/QUIT
+- WaveManager: autoStartWaves=false, added StartFirstWave(), TotalKillsAllWaves tracking
+- PlayerDeathHandler: cleaned up — removed manual Esc restart, HUD handles it now
+- ScorpionInputHandler: blocks all input during PreGame state
+- Compiled successfully (0 errors, warnings are all Invector deprecation)
+- NEEDS TESTING: wire onEnemyKilledEvent to GameManager in Inspector
 
 ## KNOWN ISSUES
 - "The referenced script (Unknown)" warning — orphaned component on player, harmless
