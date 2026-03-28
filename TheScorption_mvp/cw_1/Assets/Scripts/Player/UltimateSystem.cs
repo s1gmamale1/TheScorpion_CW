@@ -12,6 +12,7 @@ namespace TheScorpion.Player
         [SerializeField] private float ultimateDuration = 8f;
         [SerializeField] private float timeSlowFactor = 0.5f;
         [SerializeField] private float damageMultiplier = 1.5f;
+        [SerializeField] private float attackSpeedBonus = 0.3f;
 
         [Header("Adrenaline Gain")]
         [SerializeField] private float adrenalinePerHit = 2f;
@@ -95,23 +96,151 @@ namespace TheScorpion.Player
             isUltimateActive = true;
             currentAdrenaline = 0f;
 
+            // === ACTIVATION VFX ===
+            // Camera shake on activation
+            if (VFX.CameraShakeController.Instance != null)
+                VFX.CameraShakeController.Instance.ShakeHeavy();
+
+            // Activation flash — expanding ring of light
+            SpawnActivationVFX();
+
+            // Slow-mo
             Time.timeScale = timeSlowFactor;
             Time.fixedDeltaTime = 0.02f * timeSlowFactor;
 
             if (playerAnimator != null)
+            {
                 playerAnimator.updateMode = AnimatorUpdateMode.UnscaledTime;
+                playerAnimator.speed = 1f + attackSpeedBonus;
+            }
+
+            // Aura glow during ultimate
+            var auraGO = SpawnUltimateAura();
+
+            Debug.Log($"[Scorpion] ULTIMATE ACTIVATED! {ultimateDuration}s — x{damageMultiplier} damage, +{attackSpeedBonus * 100}% speed");
 
             yield return new WaitForSecondsRealtime(ultimateDuration);
 
+            // === BURST FINALE ===
             PerformElementalBurst();
+
+            // Destroy aura
+            if (auraGO != null) Destroy(auraGO);
 
             Time.timeScale = 1f;
             Time.fixedDeltaTime = 0.02f;
 
             if (playerAnimator != null)
+            {
                 playerAnimator.updateMode = AnimatorUpdateMode.Normal;
+                playerAnimator.speed = 1f;
+            }
 
             isUltimateActive = false;
+            Debug.Log("[Scorpion] Ultimate ended");
+        }
+
+        private void SpawnActivationVFX()
+        {
+            // Expanding shockwave ring
+            var ringGO = new GameObject("Ultimate_ActivationRing");
+            ringGO.transform.position = transform.position + Vector3.up * 0.1f;
+
+            // Bright flash light
+            var flash = ringGO.AddComponent<Light>();
+            flash.type = LightType.Point;
+            flash.color = Color.white;
+            flash.range = 20f;
+            flash.intensity = 8f;
+
+            // Upward burst particles
+            var ps = ringGO.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.startLifetime = 0.6f;
+            main.startSpeed = 15f;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.1f, 0.3f);
+            main.startColor = new Color(1f, 0.9f, 0.5f, 1f);
+            main.maxParticles = 60;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.gravityModifier = -0.5f;
+
+            var emission = ps.emission;
+            emission.rateOverTime = 0;
+            var burst = new ParticleSystem.Burst(0f, 60);
+            emission.SetBurst(0, burst);
+
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Circle;
+            shape.radius = 1f;
+
+            var sizeOverLife = ps.sizeOverLifetime;
+            sizeOverLife.enabled = true;
+            sizeOverLife.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0, 1, 1, 0));
+
+            var renderer = ringGO.GetComponent<ParticleSystemRenderer>();
+            renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+            renderer.material.color = new Color(1f, 0.9f, 0.5f);
+
+            Destroy(ringGO, 1.5f);
+        }
+
+        private GameObject SpawnUltimateAura()
+        {
+            var auraGO = new GameObject("Ultimate_Aura");
+            auraGO.transform.SetParent(transform);
+            auraGO.transform.localPosition = Vector3.up * 1f;
+
+            // Bright pulsing light
+            var light = auraGO.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = new Color(1f, 0.85f, 0.3f);
+            light.range = 8f;
+            light.intensity = 5f;
+
+            // Swirling energy particles
+            var ps = auraGO.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.startLifetime = 0.5f;
+            main.startSpeed = 4f;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.05f, 0.15f);
+            main.startColor = new ParticleSystem.MinMaxGradient(
+                new Color(1f, 0.9f, 0.4f, 1f),
+                new Color(1f, 0.6f, 0.1f, 0.8f));
+            main.maxParticles = 60;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.gravityModifier = -0.5f;
+
+            var emission = ps.emission;
+            emission.rateOverTime = 50;
+
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Sphere;
+            shape.radius = 0.8f;
+
+            var sizeOverLife = ps.sizeOverLifetime;
+            sizeOverLife.enabled = true;
+            sizeOverLife.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0, 1, 1, 0));
+
+            var colorOverLife = ps.colorOverLifetime;
+            colorOverLife.enabled = true;
+            var grad = new Gradient();
+            grad.SetKeys(
+                new GradientColorKey[] {
+                    new GradientColorKey(new Color(1f, 0.9f, 0.4f), 0f),
+                    new GradientColorKey(new Color(1f, 0.5f, 0.1f), 1f)
+                },
+                new GradientAlphaKey[] {
+                    new GradientAlphaKey(1f, 0f),
+                    new GradientAlphaKey(0f, 1f)
+                }
+            );
+            colorOverLife.color = grad;
+
+            var renderer = auraGO.GetComponent<ParticleSystemRenderer>();
+            renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+            renderer.material.color = new Color(1f, 0.85f, 0.3f);
+
+            return auraGO;
         }
 
         private void PerformElementalBurst()
@@ -120,6 +249,14 @@ namespace TheScorpion.Player
             var data = elementSystem.GetActiveData();
             if (data == null) return;
 
+            // === BURST VFX ===
+            SpawnBurstVFX(data.burstRadius);
+
+            // Heavy camera shake for burst
+            if (VFX.CameraShakeController.Instance != null)
+                VFX.CameraShakeController.Instance.DoShake(4f, 0.4f);
+
+            // Damage all enemies in radius
             Collider[] hits = Physics.OverlapSphere(transform.position, data.burstRadius, LayerMask.GetMask("Enemy"));
             foreach (var hit in hits)
             {
@@ -139,6 +276,70 @@ namespace TheScorpion.Player
                         statusEffects.ApplyStun(data.burstStunDuration);
                 }
             }
+
+            Debug.Log($"[Scorpion] ELEMENTAL BURST ({elementSystem.ActiveElement})! Hit {hits.Length} enemies for {data.burstDamage} damage");
+        }
+
+        private void SpawnBurstVFX(float radius)
+        {
+            Color burstColor = elementSystem.ActiveElement == Core.ElementType.Fire
+                ? new Color(1f, 0.4f, 0.1f)
+                : new Color(0.3f, 0.7f, 1f);
+
+            var burstGO = new GameObject("Ultimate_Burst");
+            burstGO.transform.position = transform.position;
+
+            // Massive flash
+            var light = burstGO.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = burstColor;
+            light.range = radius * 2f;
+            light.intensity = 12f;
+
+            // Explosion particles
+            var ps = burstGO.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.startLifetime = 1f;
+            main.startSpeed = radius * 2f;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.2f, 0.5f);
+            main.startColor = new ParticleSystem.MinMaxGradient(burstColor, Color.white);
+            main.maxParticles = 100;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+
+            var emission = ps.emission;
+            emission.rateOverTime = 0;
+            emission.SetBurst(0, new ParticleSystem.Burst(0f, 100));
+
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Sphere;
+            shape.radius = 0.5f;
+
+            var sizeOverLife = ps.sizeOverLifetime;
+            sizeOverLife.enabled = true;
+            sizeOverLife.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0, 1, 1, 0));
+
+            var colorOverLife = ps.colorOverLifetime;
+            colorOverLife.enabled = true;
+            var grad = new Gradient();
+            grad.SetKeys(
+                new GradientColorKey[] {
+                    new GradientColorKey(Color.white, 0f),
+                    new GradientColorKey(burstColor, 0.3f),
+                    new GradientColorKey(burstColor * 0.5f, 1f)
+                },
+                new GradientAlphaKey[] {
+                    new GradientAlphaKey(1f, 0f),
+                    new GradientAlphaKey(0.8f, 0.3f),
+                    new GradientAlphaKey(0f, 1f)
+                }
+            );
+            colorOverLife.color = grad;
+
+            var renderer = burstGO.GetComponent<ParticleSystemRenderer>();
+            renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+            renderer.material.color = burstColor;
+
+            Destroy(burstGO, 2f);
         }
     }
 }

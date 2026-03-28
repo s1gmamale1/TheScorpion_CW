@@ -44,12 +44,17 @@ namespace TheScorpion.Enemy
             StartCoroutine(StunCoroutine(actualDuration));
         }
 
+        private bool IsAgentActive()
+        {
+            return agent != null && agent.isOnNavMesh && agent.isActiveAndEnabled;
+        }
+
         private IEnumerator BurnCoroutine(float damagePerTick, float duration)
         {
             isBurning = true;
             float elapsed = 0f;
 
-            if (agent != null && enemyData != null && enemyData.burnSlowMultiplier < 1f)
+            if (IsAgentActive() && enemyData != null && enemyData.burnSlowMultiplier < 1f)
                 agent.speed = originalSpeed * enemyData.burnSlowMultiplier;
 
             while (elapsed < duration && healthController != null && !healthController.isDead)
@@ -60,13 +65,14 @@ namespace TheScorpion.Enemy
 
                 var dmg = new Invector.vDamage((int)actualDamage);
                 dmg.damageType = "Fire_DoT";
+                dmg.hitReaction = false; // No flinch on DoT ticks
                 healthController.TakeDamage(dmg);
 
                 yield return new WaitForSeconds(1f);
                 elapsed += 1f;
             }
 
-            if (agent != null) agent.speed = originalSpeed;
+            if (IsAgentActive()) agent.speed = originalSpeed;
             isBurning = false;
         }
 
@@ -74,13 +80,15 @@ namespace TheScorpion.Enemy
         {
             isStunned = true;
 
+            // Use Invector's TriggerReaction for stun visual instead of custom "IsStunned" param
             var animator = GetComponent<Animator>();
             if (animator != null)
             {
-                animator.SetBool("IsStunned", true);
+                animator.SetTrigger("TriggerReaction");
+                animator.SetInteger("ReactionID", 0); // Small hit reaction as stun visual
             }
 
-            if (agent != null)
+            if (IsAgentActive())
             {
                 agent.isStopped = true;
                 agent.velocity = Vector3.zero;
@@ -89,9 +97,7 @@ namespace TheScorpion.Enemy
             yield return new WaitForSeconds(duration);
 
             isStunned = false;
-            if (animator != null)
-                animator.SetBool("IsStunned", false);
-            if (agent != null)
+            if (IsAgentActive())
                 agent.isStopped = false;
         }
     }

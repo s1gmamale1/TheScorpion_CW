@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TheScorpion.Data.EnemyDataSO
   enemyName: Hollow Monk
   enemyType: 0
-  maxHealth: 30
+  maxHealth: 60
   moveSpeed: 3
   attackDamage: 8
   attackRange: 1.5

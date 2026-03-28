@@ -8,21 +8,21 @@ using TheScorpion.Enemy;
 namespace TheScorpion.Systems
 {
     /// <summary>
-    /// 10-wave spawn progression. Uses WaveDataSO for composition, SpawnPointManager for positions.
-    /// Hooks into Invector's vHealthController.onDead per spawned enemy to track kills.
+    /// 10-wave system. Each wave's total enemy count doubles (3→6→12→24...).
+    /// Max 10 enemies on screen — when alive count drops below 10, spawn more.
+    /// Enemy type mix gets harder as waves progress.
+    /// Wave clears when all enemies for that wave have been killed.
+    /// Designed for 20-30 min gameplay.
     /// </summary>
     public class WaveManager : MonoBehaviour
     {
         public static WaveManager Instance { get; private set; }
 
-        [Header("Wave Data")]
-        [SerializeField] private WaveDataSO waveData;
-
         [Header("Enemy Prefabs (Invector AI)")]
-        [SerializeField] private GameObject basicEnemyPrefab;   // Hollow Monk
-        [SerializeField] private GameObject fastEnemyPrefab;    // Shadow Acolyte
-        [SerializeField] private GameObject heavyEnemyPrefab;   // Stone Sentinel
-        [SerializeField] private GameObject bossPrefab;         // The Fallen Guardian
+        [SerializeField] private GameObject basicEnemyPrefab;
+        [SerializeField] private GameObject fastEnemyPrefab;
+        [SerializeField] private GameObject heavyEnemyPrefab;
+        [SerializeField] private GameObject bossPrefab;
 
         [Header("Enemy Data SOs")]
         [SerializeField] private EnemyDataSO basicEnemyData;
@@ -36,18 +36,26 @@ namespace TheScorpion.Systems
         [SerializeField] private IntEventChannelSO onWaveChangedEvent;
         [SerializeField] private VoidEventChannelSO onAllWavesClearedEvent;
 
-        [Header("Settings")]
+        [Header("Wave Settings")]
+        [SerializeField] private int totalWaves = 10;
+        [SerializeField] private int startingEnemies = 3;
+        [SerializeField] private int maxOnScreen = 10;
+        [SerializeField] private float spawnInterval = 1.5f;
+        [SerializeField] private float delayBetweenWaves = 3f;
         [SerializeField] private bool autoStartWaves = true;
 
         // State
-        private int currentWaveIndex = -1;
-        private int enemiesAliveThisWave;
+        private int currentWaveIndex = 0;
+        private int enemiesKilledThisWave;
+        private int enemiesSpawnedThisWave;
+        private int totalEnemiesThisWave;
+        private int aliveCount;
         private bool waveInProgress;
-        private List<GameObject> aliveEnemies = new List<GameObject>();
+        private Coroutine spawnCoroutine;
 
-        public int CurrentWave => currentWaveIndex + 1;
-        public int TotalWaves => waveData != null ? waveData.TotalWaves : 0;
-        public int EnemiesAlive => enemiesAliveThisWave;
+        public int CurrentWave => currentWaveIndex;
+        public int TotalWaves => totalWaves;
+        public int EnemiesAlive => aliveCount;
         public bool IsWaveInProgress => waveInProgress;
 
         private void Awake()
@@ -63,136 +71,259 @@ namespace TheScorpion.Systems
         private void Start()
         {
             if (autoStartWaves)
-                StartNextWave();
+                StartCoroutine(StartWaveAfterDelay(delayBetweenWaves));
+        }
+
+        private IEnumerator StartWaveAfterDelay(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            StartNextWave();
         }
 
         public void StartNextWave()
         {
-            if (waveData == null)
-            {
-                Debug.LogError("[Scorpion] WaveManager: No WaveDataSO assigned!");
-                return;
-            }
-
             currentWaveIndex++;
 
-            if (currentWaveIndex >= waveData.TotalWaves)
+            if (currentWaveIndex > totalWaves)
             {
                 OnAllWavesComplete();
                 return;
             }
 
-            var wave = waveData.GetWave(currentWaveIndex);
-            if (wave == null) return;
-
-            Debug.Log($"[Scorpion] === WAVE {CurrentWave}/{TotalWaves} ===");
-
-            if (onWaveChangedEvent != null)
-                onWaveChangedEvent.RaiseEvent(CurrentWave);
-
-            StartCoroutine(SpawnWaveCoroutine(wave));
-        }
-
-        private IEnumerator SpawnWaveCoroutine(WaveDefinition wave)
-        {
+            // Wave enemy count: 3, 6, 12, 24, 48... capped for sanity
+            totalEnemiesThisWave = GetWaveEnemyCount(currentWaveIndex);
+            enemiesKilledThisWave = 0;
+            enemiesSpawnedThisWave = 0;
+            sentinelsSpawnedThisWave = 0;
+            elementalSpawnedThisWave = 0;
+            aliveCount = 0;
             waveInProgress = true;
 
-            // Pre-wave delay
-            yield return new WaitForSeconds(wave.delayBeforeWave);
+            Debug.Log($"[Scorpion] === WAVE {currentWaveIndex}/{totalWaves} === Total enemies: {totalEnemiesThisWave}");
 
-            // Spawn basic enemies
-            for (int i = 0; i < wave.basicEnemyCount; i++)
+            if (onWaveChangedEvent != null)
+                onWaveChangedEvent.RaiseEvent(currentWaveIndex);
+
+            // Start continuous spawn loop
+            if (spawnCoroutine != null)
+                StopCoroutine(spawnCoroutine);
+            spawnCoroutine = StartCoroutine(ContinuousSpawnLoop());
+        }
+
+        private int GetWaveEnemyCount(int wave)
+        {
+            // Wave 1: 3, Wave 2: 6, Wave 3: 12, Wave 4: 24, Wave 5: 48...
+            // Cap at reasonable numbers for 20-30 min gameplay
+            int count = startingEnemies * (1 << (wave - 1)); // doubles each wave
+            return Mathf.Min(count, 200); // safety cap
+        }
+
+        private IEnumerator ContinuousSpawnLoop()
+        {
+            while (enemiesSpawnedThisWave < totalEnemiesThisWave)
             {
-                SpawnEnemy(basicEnemyPrefab, basicEnemyData);
-                yield return new WaitForSeconds(wave.spawnInterval);
+                if (aliveCount < maxOnScreen)
+                {
+                    SpawnRandomEnemy();
+                    yield return new WaitForSeconds(spawnInterval);
+                }
+                else
+                {
+                    yield return new WaitForSeconds(0.5f);
+                }
+            }
+            // All spawned — just wait for remaining to die
+        }
+
+        private void SpawnRandomEnemy()
+        {
+            if (enemiesSpawnedThisWave >= totalEnemiesThisWave) return;
+
+            // Pick enemy type based on wave progression
+            var (prefab, data) = PickEnemyType();
+            if (prefab == null) return;
+
+            SpawnEnemy(prefab, data);
+            enemiesSpawnedThisWave++;
+        }
+
+        // Track guaranteed spawns per wave
+        private int sentinelsSpawnedThisWave;
+        private int elementalSpawnedThisWave;
+
+        private (GameObject prefab, EnemyDataSO data) PickEnemyType()
+        {
+            if (currentWaveIndex >= totalWaves && bossPrefab != null)
+                return (bossPrefab, bossData);
+
+            // Wave 3+: guaranteed tanks — 3 base + 1 per wave after 3
+            // Wave 3=3, Wave 4=4, Wave 5=5, ... Wave 10=10
+            if (currentWaveIndex >= 3)
+            {
+                int minSentinels = currentWaveIndex;
+                if (sentinelsSpawnedThisWave < minSentinels && heavyEnemyPrefab != null)
+                {
+                    sentinelsSpawnedThisWave++;
+                    return (heavyEnemyPrefab, heavyEnemyData);
+                }
             }
 
-            // Spawn fast enemies
-            for (int i = 0; i < wave.fastEnemyCount; i++)
+            // Wave 5+: guaranteed elemental ninjas — 5 base + 1 per wave after 5
+            // Wave 5=5, Wave 6=6, Wave 7=7, ... Wave 10=10
+            if (currentWaveIndex >= 5)
             {
-                SpawnEnemy(fastEnemyPrefab, fastEnemyData);
-                yield return new WaitForSeconds(wave.spawnInterval);
+                int minElemental = currentWaveIndex;
+                if (elementalSpawnedThisWave < minElemental && fastEnemyPrefab != null)
+                {
+                    elementalSpawnedThisWave++;
+                    return (fastEnemyPrefab, fastEnemyData);
+                }
             }
 
-            // Spawn heavy enemies
-            for (int i = 0; i < wave.heavyEnemyCount; i++)
-            {
-                SpawnEnemy(heavyEnemyPrefab, heavyEnemyData);
-                yield return new WaitForSeconds(wave.spawnInterval);
-            }
+            // Fill rest with basic gooners
+            return (basicEnemyPrefab, basicEnemyData);
+        }
 
-            // Spawn boss
-            if (wave.isBossWave && bossPrefab != null)
+        private Transform playerTransform;
+
+        private Transform GetPlayer()
+        {
+            if (playerTransform == null)
             {
-                SpawnEnemy(bossPrefab, bossData);
+                var player = GameObject.FindGameObjectWithTag("Player");
+                if (player != null) playerTransform = player.transform;
             }
+            return playerTransform;
+        }
+
+        private Vector3 GetSpawnPositionNearPlayer()
+        {
+            var player = GetPlayer();
+            Vector3 center = player != null ? player.position : Vector3.zero;
+
+            // Random point 5-10m from player
+            float angle = Random.Range(0f, 360f) * Mathf.Deg2Rad;
+            float dist = Random.Range(5f, 10f);
+            Vector3 offset = new Vector3(Mathf.Cos(angle) * dist, 0f, Mathf.Sin(angle) * dist);
+            Vector3 spawnPos = center + offset;
+
+            // Snap to NavMesh
+            UnityEngine.AI.NavMeshHit navHit;
+            if (UnityEngine.AI.NavMesh.SamplePosition(spawnPos, out navHit, 10f, UnityEngine.AI.NavMesh.AllAreas))
+                return navHit.position;
+
+            // Fallback: try closer
+            if (UnityEngine.AI.NavMesh.SamplePosition(center + offset * 0.5f, out navHit, 15f, UnityEngine.AI.NavMesh.AllAreas))
+                return navHit.position;
+
+            return center + Vector3.forward * 5f;
         }
 
         private void SpawnEnemy(GameObject prefab, EnemyDataSO data)
         {
-            if (prefab == null || SpawnPointManager.Instance == null) return;
+            if (prefab == null) return;
 
-            var (position, rotation) = SpawnPointManager.Instance.GetSpawnPointData();
+            Vector3 position = GetSpawnPositionNearPlayer();
+            var player = GetPlayer();
+            Quaternion rotation = player != null
+                ? Quaternion.LookRotation((player.position - position).normalized)
+                : Quaternion.identity;
+
+            // Disable NavMeshAgent on prefab before instantiation
+            var prefabAgent = prefab.GetComponent<UnityEngine.AI.NavMeshAgent>();
+            bool agentWasEnabled = false;
+            if (prefabAgent != null)
+            {
+                agentWasEnabled = prefabAgent.enabled;
+                prefabAgent.enabled = false;
+            }
+
             var enemy = Instantiate(prefab, position, rotation);
 
-            // Initialize our custom components
+            // Restore prefab agent
+            if (prefabAgent != null) prefabAgent.enabled = agentWasEnabled;
+
+            // Enable spawned agent after positioning
+            var spawnedAgent = enemy.GetComponent<UnityEngine.AI.NavMeshAgent>();
+            if (spawnedAgent != null)
+            {
+                spawnedAgent.enabled = false;
+                enemy.transform.position = position;
+                spawnedAgent.enabled = true;
+
+                if (!spawnedAgent.isOnNavMesh)
+                {
+                    UnityEngine.AI.NavMeshHit navHit;
+                    if (UnityEngine.AI.NavMesh.SamplePosition(enemy.transform.position, out navHit, 20f, UnityEngine.AI.NavMesh.AllAreas))
+                        spawnedAgent.Warp(navHit.position);
+                }
+            }
+
+            // Initialize custom components
             var ext = enemy.GetComponent<EnemyExtension>();
             if (ext != null)
-            {
                 ext.Initialize(data, onEnemyKilledEvent, onAdrenalineGainEvent);
-            }
 
             var statusFx = enemy.GetComponent<EnemyStatusEffects>();
             if (statusFx != null && data != null)
-            {
                 statusFx.SetEnemyData(data);
+
+            // Add type-specific behavior based on enemy data
+            if (data != null)
+            {
+                switch (data.enemyType)
+                {
+                    case Core.EnemyType.Fast:
+                        if (enemy.GetComponent<ShadowAcolyteBehavior>() == null)
+                            enemy.AddComponent<ShadowAcolyteBehavior>();
+                        break;
+                    case Core.EnemyType.Heavy:
+                        if (enemy.GetComponent<StoneSentinelBehavior>() == null)
+                            enemy.AddComponent<StoneSentinelBehavior>();
+                        break;
+                }
             }
 
-            // Hook into Invector's death for wave tracking
+            // Force AI to aggro player immediately
+            ForceAggroPlayer(enemy);
+
+            // Hook death for tracking
             var health = enemy.GetComponent<Invector.vHealthController>();
             if (health != null)
-            {
-                health.onDead.AddListener((deadObj) => OnEnemyDied(enemy));
-            }
+                health.onDead.AddListener((deadObj) => OnEnemyDied());
 
-            // Set AI target to player
-            SetAITarget(enemy);
-
-            aliveEnemies.Add(enemy);
-            enemiesAliveThisWave++;
+            aliveCount++;
         }
 
-        private void SetAITarget(GameObject enemy)
+        private void ForceAggroPlayer(GameObject enemy)
         {
-            var player = GameObject.FindGameObjectWithTag("Player");
+            var player = GetPlayer();
             if (player == null) return;
 
-            // Invector Simple Melee AI detects by tags — ensure enemy has correct detection setup
-            // The prefab should already have tagsToDetect = "Player" configured
-            // But let's also try to force set the target if the AI has a SetCurrentTarget method
-            var aiController = enemy.GetComponent<Invector.vCharacterController.vThirdPersonController>();
-            // Invector AI auto-detects by tag, so this should work if prefab is configured correctly
-        }
-
-        private void OnEnemyDied(GameObject enemy)
-        {
-            aliveEnemies.Remove(enemy);
-            enemiesAliveThisWave--;
-
-            if (enemiesAliveThisWave <= 0 && waveInProgress)
+            // Invector Simple Melee AI uses SetCurrentTarget to force chase
+            var aiController = enemy.GetComponent<Invector.vCharacterController.AI.vSimpleMeleeAI_Controller>();
+            if (aiController != null)
             {
-                waveInProgress = false;
-                Debug.Log($"[Scorpion] Wave {CurrentWave} CLEARED!");
-
-                // Small delay then next wave
-                StartCoroutine(DelayedNextWave());
+                aiController.SetCurrentTarget(player);
             }
         }
 
-        private IEnumerator DelayedNextWave()
+        private void OnEnemyDied()
         {
-            yield return new WaitForSeconds(2f);
-            StartNextWave();
+            aliveCount = Mathf.Max(0, aliveCount - 1);
+            enemiesKilledThisWave++;
+
+            Debug.Log($"[Scorpion] Enemy killed! {enemiesKilledThisWave}/{totalEnemiesThisWave} | Alive: {aliveCount}");
+
+            if (enemiesKilledThisWave >= totalEnemiesThisWave && waveInProgress)
+            {
+                waveInProgress = false;
+                if (spawnCoroutine != null)
+                    StopCoroutine(spawnCoroutine);
+
+                Debug.Log($"[Scorpion] Wave {currentWaveIndex} CLEARED!");
+                StartCoroutine(StartWaveAfterDelay(delayBetweenWaves));
+            }
         }
 
         private void OnAllWavesComplete()

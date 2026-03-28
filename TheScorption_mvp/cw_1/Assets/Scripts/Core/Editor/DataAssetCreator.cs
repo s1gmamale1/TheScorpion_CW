@@ -308,6 +308,206 @@ public class DataAssetCreator
         Debug.Log("[Scorpion] Created all event channel assets");
     }
 
+    [MenuItem("Tools/Scorpion/Wire Wave System")]
+    public static void WireWaveSystem()
+    {
+        // Wire SpawnPointManager spawn points
+        var spawnMgr = Object.FindAnyObjectByType<TheScorpion.Systems.SpawnPointManager>();
+        if (spawnMgr != null)
+        {
+            var spawnSO = new SerializedObject(spawnMgr);
+            var spawnProp = spawnSO.FindProperty("spawnPoints");
+            var north = GameObject.Find("SpawnPoint_North");
+            var south = GameObject.Find("SpawnPoint_South");
+            var east = GameObject.Find("SpawnPoint_East");
+            var west = GameObject.Find("SpawnPoint_West");
+
+            if (north != null && south != null && east != null && west != null)
+            {
+                spawnProp.arraySize = 4;
+                spawnProp.GetArrayElementAtIndex(0).objectReferenceValue = north.transform;
+                spawnProp.GetArrayElementAtIndex(1).objectReferenceValue = south.transform;
+                spawnProp.GetArrayElementAtIndex(2).objectReferenceValue = east.transform;
+                spawnProp.GetArrayElementAtIndex(3).objectReferenceValue = west.transform;
+                spawnSO.ApplyModifiedProperties();
+                EditorUtility.SetDirty(spawnMgr);
+                Debug.Log("[Scorpion] SpawnPointManager: 4 spawn points wired");
+            }
+            else
+            {
+                Debug.LogError("[Scorpion] SpawnPointManager: Could not find all spawn points!");
+            }
+        }
+
+        // Wire WaveManager
+        var waveMgr = Object.FindAnyObjectByType<TheScorpion.Systems.WaveManager>();
+        if (waveMgr != null)
+        {
+            var waveSO = new SerializedObject(waveMgr);
+
+            // Wave data
+            var waveData = AssetDatabase.LoadAssetAtPath<WaveDataSO>("Assets/ScriptableObjects/WaveData/Level1_Waves.asset");
+            if (waveData != null)
+                waveSO.FindProperty("waveData").objectReferenceValue = waveData;
+
+            // Enemy data SOs
+            var monkData = AssetDatabase.LoadAssetAtPath<EnemyDataSO>("Assets/ScriptableObjects/EnemyData/HollowMonk_Data.asset");
+            var acolyteData = AssetDatabase.LoadAssetAtPath<EnemyDataSO>("Assets/ScriptableObjects/EnemyData/ShadowAcolyte_Data.asset");
+            var sentinelData = AssetDatabase.LoadAssetAtPath<EnemyDataSO>("Assets/ScriptableObjects/EnemyData/StoneSentinel_Data.asset");
+            var bossData = AssetDatabase.LoadAssetAtPath<EnemyDataSO>("Assets/ScriptableObjects/EnemyData/FallenGuardian_Data.asset");
+
+            if (monkData != null) waveSO.FindProperty("basicEnemyData").objectReferenceValue = monkData;
+            if (acolyteData != null) waveSO.FindProperty("fastEnemyData").objectReferenceValue = acolyteData;
+            if (sentinelData != null) waveSO.FindProperty("heavyEnemyData").objectReferenceValue = sentinelData;
+            if (bossData != null) waveSO.FindProperty("bossData").objectReferenceValue = bossData;
+
+            // Event channels
+            var onEnemyKilled = AssetDatabase.LoadAssetAtPath<VoidEventChannelSO>("Assets/ScriptableObjects/Events/OnEnemyKilled.asset");
+            var onWaveChanged = AssetDatabase.LoadAssetAtPath<IntEventChannelSO>("Assets/ScriptableObjects/Events/OnWaveStart.asset");
+            var onAllWavesCleared = AssetDatabase.LoadAssetAtPath<VoidEventChannelSO>("Assets/ScriptableObjects/Events/OnVictory.asset");
+            var onAdrenalineGain = AssetDatabase.LoadAssetAtPath<IntEventChannelSO>("Assets/ScriptableObjects/Events/OnElementChanged.asset");
+
+            if (onEnemyKilled != null) waveSO.FindProperty("onEnemyKilledEvent").objectReferenceValue = onEnemyKilled;
+            if (onWaveChanged != null) waveSO.FindProperty("onWaveChangedEvent").objectReferenceValue = onWaveChanged;
+            if (onAllWavesCleared != null) waveSO.FindProperty("onAllWavesClearedEvent").objectReferenceValue = onAllWavesCleared;
+
+            // Enemy prefabs — use existing scene enemies as template
+            // For now, reference them directly; will convert to prefabs later
+            var enemyA = GameObject.Find("EnemyAI_A");
+            var enemyB = GameObject.Find("EnemyAI_B");
+            var enemyC = GameObject.Find("EnemyAI_C");
+
+            // Disable auto-start until prefabs are ready
+            waveSO.FindProperty("autoStartWaves").boolValue = false;
+
+            waveSO.ApplyModifiedProperties();
+            EditorUtility.SetDirty(waveMgr);
+            Debug.Log("[Scorpion] WaveManager: data + events wired (prefabs need manual assignment)");
+        }
+
+        AssetDatabase.SaveAssets();
+    }
+
+    [MenuItem("Tools/Scorpion/Create Enemy Prefabs")]
+    public static void CreateEnemyPrefabs()
+    {
+        // Ensure prefab folder exists
+        if (!AssetDatabase.IsValidFolder("Assets/Prefabs"))
+            AssetDatabase.CreateFolder("Assets", "Prefabs");
+        if (!AssetDatabase.IsValidFolder("Assets/Prefabs/Enemies"))
+            AssetDatabase.CreateFolder("Assets/Prefabs", "Enemies");
+
+        // Create prefabs from scene enemies
+        var enemyA = GameObject.Find("EnemyAI_A");
+        var enemyB = GameObject.Find("EnemyAI_B");
+        var enemyC = GameObject.Find("EnemyAI_C");
+
+        string basicPath = "Assets/Prefabs/Enemies/HollowMonk_Prefab.prefab";
+        string fastPath = "Assets/Prefabs/Enemies/ShadowAcolyte_Prefab.prefab";
+        string heavyPath = "Assets/Prefabs/Enemies/StoneSentinel_Prefab.prefab";
+
+        if (enemyA != null && !AssetDatabase.LoadAssetAtPath<GameObject>(basicPath))
+        {
+            PrefabUtility.SaveAsPrefabAsset(enemyA, basicPath);
+            Debug.Log("[Scorpion] Created HollowMonk prefab from EnemyAI_A");
+        }
+        if (enemyB != null && !AssetDatabase.LoadAssetAtPath<GameObject>(fastPath))
+        {
+            PrefabUtility.SaveAsPrefabAsset(enemyB, fastPath);
+            Debug.Log("[Scorpion] Created ShadowAcolyte prefab from EnemyAI_B");
+        }
+        if (enemyC != null && !AssetDatabase.LoadAssetAtPath<GameObject>(heavyPath))
+        {
+            PrefabUtility.SaveAsPrefabAsset(enemyC, heavyPath);
+            Debug.Log("[Scorpion] Created StoneSentinel prefab from EnemyAI_C");
+        }
+
+        AssetDatabase.SaveAssets();
+
+        // Now wire them to WaveManager
+        var waveMgr = Object.FindAnyObjectByType<TheScorpion.Systems.WaveManager>();
+        if (waveMgr != null)
+        {
+            var waveSO = new SerializedObject(waveMgr);
+            var basicPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(basicPath);
+            var fastPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(fastPath);
+            var heavyPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(heavyPath);
+
+            if (basicPrefab != null) waveSO.FindProperty("basicEnemyPrefab").objectReferenceValue = basicPrefab;
+            if (fastPrefab != null) waveSO.FindProperty("fastEnemyPrefab").objectReferenceValue = fastPrefab;
+            if (heavyPrefab != null) waveSO.FindProperty("heavyEnemyPrefab").objectReferenceValue = heavyPrefab;
+
+            waveSO.ApplyModifiedProperties();
+            EditorUtility.SetDirty(waveMgr);
+            Debug.Log("[Scorpion] WaveManager: enemy prefabs assigned");
+        }
+
+        Debug.Log("[Scorpion] Enemy prefabs created and wired!");
+    }
+
+    [MenuItem("Tools/Scorpion/Rebalance All Data")]
+    public static void RebalanceAllData()
+    {
+        // === ELEMENT DATA ===
+        var fire = AssetDatabase.LoadAssetAtPath<ElementDataSO>("Assets/ScriptableObjects/ElementData/Fire_Data.asset");
+        if (fire != null)
+        {
+            fire.ability1Damage = 8f;      // Fire Tornado: 8/tick × 3s = 24 total (was 15/tick = 45)
+            fire.ability1Radius = 4f;
+            fire.ability2BurnDamagePerTick = 3f; // Aura burn: 3/tick (was 5)
+            fire.burstDamage = 30f;         // Ultimate burst (was 60)
+            fire.burstRadius = 8f;
+            EditorUtility.SetDirty(fire);
+        }
+
+        var lightning = AssetDatabase.LoadAssetAtPath<ElementDataSO>("Assets/ScriptableObjects/ElementData/Lightning_Data.asset");
+        if (lightning != null)
+        {
+            lightning.ability1Damage = 10f;  // Lightning Burst: 10 instant (was 20)
+            lightning.ability1Radius = 3f;
+            lightning.burstDamage = 20f;     // Ultimate burst (was 40)
+            lightning.burstRadius = 12f;
+            lightning.burstStunDuration = 2f;
+            EditorUtility.SetDirty(lightning);
+        }
+
+        // === ENEMY DATA — increase HP for longer fights ===
+        var monk = AssetDatabase.LoadAssetAtPath<EnemyDataSO>("Assets/ScriptableObjects/EnemyData/HollowMonk_Data.asset");
+        if (monk != null)
+        {
+            monk.maxHealth = 60;     // Was 30 — needs ~6 melee hits to kill
+            monk.attackDamage = 8;
+            EditorUtility.SetDirty(monk);
+        }
+
+        var acolyte = AssetDatabase.LoadAssetAtPath<EnemyDataSO>("Assets/ScriptableObjects/EnemyData/ShadowAcolyte_Data.asset");
+        if (acolyte != null)
+        {
+            acolyte.maxHealth = 40;  // Was 20
+            acolyte.attackDamage = 10;
+            EditorUtility.SetDirty(acolyte);
+        }
+
+        var sentinel = AssetDatabase.LoadAssetAtPath<EnemyDataSO>("Assets/ScriptableObjects/EnemyData/StoneSentinel_Data.asset");
+        if (sentinel != null)
+        {
+            sentinel.maxHealth = 120; // Was 80
+            sentinel.attackDamage = 18;
+            EditorUtility.SetDirty(sentinel);
+        }
+
+        var boss = AssetDatabase.LoadAssetAtPath<EnemyDataSO>("Assets/ScriptableObjects/EnemyData/FallenGuardian_Data.asset");
+        if (boss != null)
+        {
+            boss.maxHealth = 500;    // Was 300
+            boss.attackDamage = 15;
+            EditorUtility.SetDirty(boss);
+        }
+
+        AssetDatabase.SaveAssets();
+        Debug.Log("[Scorpion] REBALANCED: Monk HP=60, Acolyte HP=40, Sentinel HP=120, Boss HP=500 | Projectile=5, FireTornado=8/tick, LBurst=10, FireBurst=30, LBurst=20");
+    }
+
     private static void CreateAsset(Object asset, string path)
     {
         var existing = AssetDatabase.LoadAssetAtPath<Object>(path);

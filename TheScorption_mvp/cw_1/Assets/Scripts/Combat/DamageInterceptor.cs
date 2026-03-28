@@ -12,69 +12,169 @@ namespace TheScorpion.Combat
         [SerializeField] private ElementSystem elementSystem;
         [SerializeField] private UltimateSystem ultimateSystem;
 
+        [Header("Combo Tracking")]
+        [SerializeField] private float comboWindowTime = 0.6f;
+        [SerializeField] private int finisherThreshold = 3;
+
         [Header("Event Channels")]
         [SerializeField] private DamageEventChannelSO onDamageDealtEvent;
         [SerializeField] private VoidEventChannelSO onEnemyKilledEvent;
 
+        [Header("Combo Regen Bonus")]
+        [SerializeField] private float baseEnergyRegen = 3f;
+        [SerializeField] private float comboRegenBonusPerHit = 0.5f;
+        [SerializeField] private float maxComboRegenMultiplier = 3f;
+
         private vMeleeManager meleeManager;
+        private StyleMeter styleMeter;
+        private Animator playerAnimator;
+        private Invector.vCharacterController.vThirdPersonController playerMotor;
+
+        // Combo state
+        private int comboCounter;
+        private float comboTimer;
+        private int lastAttackID = -1;
+
+        public int ComboCounter => comboCounter;
+        public float ComboRegenMultiplier => Mathf.Min(1f + comboCounter * comboRegenBonusPerHit, maxComboRegenMultiplier);
 
         private void Start()
         {
             meleeManager = GetComponent<vMeleeManager>();
+            styleMeter = GetComponent<StyleMeter>();
+            playerAnimator = GetComponent<Animator>();
+            playerMotor = GetComponent<Invector.vCharacterController.vThirdPersonController>();
+
             if (meleeManager != null)
-            {
                 meleeManager.onDamageHit.AddListener(OnPlayerDealtDamage);
-            }
 
             var healthController = GetComponent<Invector.vHealthController>();
             if (healthController != null)
-            {
                 healthController.onReceiveDamage.AddListener(OnPlayerTookDamage);
+        }
+
+        private void Update()
+        {
+            // Decay combo window
+            if (comboTimer > 0f)
+            {
+                comboTimer -= Time.unscaledDeltaTime;
+                if (comboTimer <= 0f)
+                    comboCounter = 0;
+            }
+
+            // Combo regen bonus — higher combo = faster MP and stamina recovery
+            if (comboCounter > 0 && elementSystem != null)
+            {
+                float bonusRegen = (ComboRegenMultiplier - 1f) * baseEnergyRegen * Time.deltaTime;
+                if (bonusRegen > 0f)
+                    elementSystem.GainEnergy(bonusRegen);
+            }
+
+            // Boost stamina recovery based on combo
+            if (comboCounter > 0 && playerMotor != null)
+            {
+                float staminaBonus = comboCounter * 0.3f * Time.deltaTime;
+                playerMotor.ChangeStamina((int)(staminaBonus * 10f));
             }
         }
 
         private void OnPlayerDealtDamage(vHitInfo hitInfo)
         {
-            if (elementSystem != null)
+            if (hitInfo.attackObject == null || hitInfo.attackObject.damage == null) return;
+
+            var damage = hitInfo.attackObject.damage;
+
+            // === 1. Apply active element to melee damage ===
+            if (elementSystem != null && elementSystem.ActiveElement != ElementType.None)
+                damage.damageType = elementSystem.ActiveElement.ToString();
+
+            // === 2. Apply ultimate damage multiplier ===
+            if (ultimateSystem != null && ultimateSystem.IsUltimateActive)
+                damage.damageValue = Mathf.RoundToInt(damage.damageValue * ultimateSystem.GetDamageMultiplier());
+
+            // === 3. Fire Aura burn on melee hit ===
+            if (elementSystem != null && elementSystem.IsAbility2Active && elementSystem.ActiveElement == ElementType.Fire)
             {
-                elementSystem.GainEnergy(5f);
+                var targetStatus = hitInfo.targetCollider?.GetComponentInParent<Enemy.EnemyStatusEffects>();
+                if (targetStatus != null && !targetStatus.IsBurning)
+                {
+                    float burnDmg = elementSystem.GetAttackBonusDamage();
+                    if (burnDmg > 0f)
+                        targetStatus.ApplyBurn(burnDmg, 2f);
+                }
             }
 
+            // === 4. Energy gain on hit ===
+            if (elementSystem != null)
+                elementSystem.GainEnergy(5f);
+
+            // === 5. Combo tracking + finisher detection ===
+            int currentAttackID = meleeManager.GetAttackID();
+            comboCounter++;
+            comboTimer = comboWindowTime;
+
+            bool isFinisher = comboCounter >= finisherThreshold && currentAttackID != lastAttackID;
+            lastAttackID = currentAttackID;
+
+            // === 6. Adrenaline gain ===
             if (ultimateSystem != null)
             {
-                float styleMultiplier = 1f;
-                var styleMeter = GetComponent<StyleMeter>();
-                if (styleMeter != null) styleMultiplier = styleMeter.GetMultiplier();
+                float styleMultiplier = styleMeter != null ? styleMeter.GetMultiplier() : 1f;
 
-                ultimateSystem.AddAdrenalineForHit(styleMultiplier);
+                if (isFinisher)
+                    ultimateSystem.AddAdrenalineForFinisher(styleMultiplier);
+                else
+                    ultimateSystem.AddAdrenalineForHit(styleMultiplier);
             }
 
+            // === 7. Feed style meter ===
+            if (styleMeter != null)
+            {
+                ElementType elem = elementSystem != null ? elementSystem.ActiveElement : ElementType.None;
+                styleMeter.OnHitLanded(currentAttackID, elem);
+            }
+
+            // === 8. Raise damage event ===
             if (onDamageDealtEvent != null)
             {
                 var data = new DamageEventData
                 {
                     Sender = transform,
                     Receiver = hitInfo.targetCollider?.transform,
-                    DamageValue = hitInfo.attackObject?.damage?.damageValue ?? 0,
+                    DamageValue = damage.damageValue,
                     Element = elementSystem != null ? elementSystem.ActiveElement : ElementType.None,
-                    HitPoint = hitInfo.hitPoint
+                    HitPoint = hitInfo.hitPoint,
+                    IsFinisher = isFinisher
                 };
                 onDamageDealtEvent.RaiseEvent(data);
             }
 
-            // Camera shake on attack hit
+            // === 9. Camera shake ===
             if (CameraShakeController.Instance != null)
-                CameraShakeController.Instance.ShakeOnAttack();
+            {
+                if (isFinisher)
+                    CameraShakeController.Instance.ShakeHeavy();
+                else
+                    CameraShakeController.Instance.ShakeOnAttack();
+            }
         }
 
         private void OnPlayerTookDamage(Invector.vDamage damage)
         {
+            // Comeback adrenaline
             if (ultimateSystem != null)
-            {
                 ultimateSystem.AddAdrenalineForDamageTaken();
-            }
 
-            // Camera shake on taking damage
+            // Drop style rank on hit
+            if (styleMeter != null)
+                styleMeter.OnHitTaken();
+
+            // Reset combo
+            comboCounter = 0;
+            comboTimer = 0f;
+
+            // Camera shake
             if (CameraShakeController.Instance != null)
                 CameraShakeController.Instance.ShakeOnHit();
         }
@@ -82,9 +182,7 @@ namespace TheScorpion.Combat
         private void OnDestroy()
         {
             if (meleeManager != null)
-            {
                 meleeManager.onDamageHit.RemoveListener(OnPlayerDealtDamage);
-            }
         }
     }
 }

@@ -23,7 +23,7 @@ namespace TheScorpion.Player
         [Header("Projectile")]
         [SerializeField] private float projectileCooldown = 0.5f;
         [SerializeField] private float projectileEnergyCost = 10f;
-        [SerializeField] private float projectileDamage = 12f;
+        [SerializeField] private float projectileDamage = 5f;
         [SerializeField] private float projectileSpeed = 25f;
         [SerializeField] private GameObject fireProjectilePrefab;
         [SerializeField] private GameObject lightningProjectilePrefab;
@@ -337,46 +337,156 @@ namespace TheScorpion.Player
         private IEnumerator FireAura(ElementDataSO data)
         {
             ability2Active = true;
-            var auraVFX = SpawnVFXOnPlayer(data.ability2VFXPrefab, data.ability2Duration);
-            float elapsed = 0f;
-            while (elapsed < data.ability2Duration)
-            {
-                elapsed += Time.deltaTime;
-                yield return null;
-            }
+            Debug.Log($"[Scorpion] Fire Aura ACTIVE for {data.ability2Duration}s — melee hits apply burn");
+
+            var vfxGO = CreateFireAuraVFX();
+            vfxGO.transform.SetParent(transform);
+            vfxGO.transform.localPosition = Vector3.zero;
+
+            yield return new WaitForSeconds(data.ability2Duration);
+
+            if (vfxGO != null) Destroy(vfxGO);
             ability2Active = false;
+            Debug.Log("[Scorpion] Fire Aura ended");
         }
 
         private IEnumerator LightningSpeed(ElementDataSO data)
         {
             ability2Active = true;
-            var speedVFX = SpawnVFXOnPlayer(data.ability2VFXPrefab, data.ability2Duration);
+            Debug.Log($"[Scorpion] Lightning Speed ACTIVE for {data.ability2Duration}s — +{data.ability2AttackSpeedBonus * 100}% atk, +{data.ability2MoveSpeedBonus * 100}% move");
+
+            var vfxGO = CreateLightningSpeedVFX();
+            vfxGO.transform.SetParent(transform);
+            vfxGO.transform.localPosition = Vector3.zero;
 
             var motor = GetComponent<Invector.vCharacterController.vThirdPersonController>();
+            float origWalk = 0f, origRun = 0f, origSprint = 0f;
             if (motor != null)
             {
-                var originalSpeed = motor.freeSpeed.walkSpeed;
+                origWalk = motor.freeSpeed.walkSpeed;
+                origRun = motor.freeSpeed.runningSpeed;
+                origSprint = motor.freeSpeed.sprintSpeed;
                 motor.freeSpeed.walkSpeed *= (1f + data.ability2MoveSpeedBonus);
+                motor.freeSpeed.runningSpeed *= (1f + data.ability2MoveSpeedBonus);
+                motor.freeSpeed.sprintSpeed *= (1f + data.ability2MoveSpeedBonus);
             }
 
             var animator = GetComponent<Animator>();
             if (animator != null)
-            {
                 animator.speed = 1f + data.ability2AttackSpeedBonus;
-            }
 
             yield return new WaitForSeconds(data.ability2Duration);
 
             if (motor != null)
             {
-                motor.freeSpeed.walkSpeed = motor.freeSpeed.walkSpeed / (1f + data.ability2MoveSpeedBonus);
+                motor.freeSpeed.walkSpeed = origWalk;
+                motor.freeSpeed.runningSpeed = origRun;
+                motor.freeSpeed.sprintSpeed = origSprint;
             }
             if (animator != null)
-            {
                 animator.speed = 1f;
-            }
 
+            if (vfxGO != null) Destroy(vfxGO);
             ability2Active = false;
+            Debug.Log("[Scorpion] Lightning Speed ended");
+        }
+
+        private GameObject CreateFireAuraVFX()
+        {
+            var go = new GameObject("FireAura_VFX");
+
+            // Point light
+            var light = go.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = new Color(1f, 0.4f, 0.1f);
+            light.range = 6f;
+            light.intensity = 4f;
+
+            // Rising fire embers
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.startLifetime = 0.8f;
+            main.startSpeed = 2f;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.05f, 0.15f);
+            main.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.6f, 0f, 1f), new Color(1f, 0.2f, 0f, 0.8f));
+            main.maxParticles = 40;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.gravityModifier = -0.3f; // Float upward
+
+            var emission = ps.emission;
+            emission.rateOverTime = 30;
+
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Circle;
+            shape.radius = 0.8f;
+
+            var sizeOverLife = ps.sizeOverLifetime;
+            sizeOverLife.enabled = true;
+            sizeOverLife.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0, 1, 1, 0));
+
+            var colorOverLife = ps.colorOverLifetime;
+            colorOverLife.enabled = true;
+            var grad = new Gradient();
+            grad.SetKeys(
+                new GradientColorKey[] { new GradientColorKey(new Color(1f, 0.6f, 0f), 0f), new GradientColorKey(new Color(1f, 0.1f, 0f), 1f) },
+                new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) }
+            );
+            colorOverLife.color = grad;
+
+            // Use default particle material
+            var renderer = go.GetComponent<ParticleSystemRenderer>();
+            renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+            renderer.material.color = new Color(1f, 0.5f, 0.1f, 1f);
+
+            return go;
+        }
+
+        private GameObject CreateLightningSpeedVFX()
+        {
+            var go = new GameObject("LightningSpeed_VFX");
+
+            // Point light
+            var light = go.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = new Color(0.3f, 0.7f, 1f);
+            light.range = 6f;
+            light.intensity = 4f;
+
+            // Electric sparks circling body
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.startLifetime = 0.4f;
+            main.startSpeed = 3f;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.03f, 0.1f);
+            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.5f, 0.8f, 1f, 1f), new Color(0.2f, 0.5f, 1f, 0.9f));
+            main.maxParticles = 50;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+
+            var emission = ps.emission;
+            emission.rateOverTime = 40;
+
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Sphere;
+            shape.radius = 0.6f;
+
+            var sizeOverLife = ps.sizeOverLifetime;
+            sizeOverLife.enabled = true;
+            sizeOverLife.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0, 1, 1, 0));
+
+            var colorOverLife = ps.colorOverLifetime;
+            colorOverLife.enabled = true;
+            var grad = new Gradient();
+            grad.SetKeys(
+                new GradientColorKey[] { new GradientColorKey(new Color(0.7f, 0.9f, 1f), 0f), new GradientColorKey(new Color(0.2f, 0.4f, 1f), 1f) },
+                new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) }
+            );
+            colorOverLife.color = grad;
+
+            var renderer = go.GetComponent<ParticleSystemRenderer>();
+            renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+            renderer.material.color = new Color(0.4f, 0.7f, 1f, 1f);
+
+            return go;
         }
 
         public float GetAttackBonusDamage()

@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TheScorpion.Data.EnemyDataSO
   enemyName: The Fallen Guardian
   enemyType: 3
-  maxHealth: 300
+  maxHealth: 500
   moveSpeed: 4
   attackDamage: 15
   attackRange: 2.5

@@ -14,9 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TheScorpion.Data.EnemyDataSO
   enemyName: Stone Sentinel
   enemyType: 2
-  maxHealth: 80
+  maxHealth: 120
   moveSpeed: 2
-  attackDamage: 20
+  attackDamage: 18
   attackRange: 2
   attackWindup: 1.5
   attackRecovery: 1
