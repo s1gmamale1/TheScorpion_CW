@@ -34,8 +34,11 @@ namespace TheScorpion.Combat
         private int comboCounter;
         private float comboTimer;
         private int lastAttackID = -1;
+        private bool comboActive; // true once 3+ hits reached
 
         public int ComboCounter => comboCounter;
+        public bool IsComboActive => comboActive;
+        public float ComboDamageMultiplier => comboActive ? 1.05f : 1f; // +5% during combo
         public float ComboRegenMultiplier => Mathf.Min(1f + comboCounter * comboRegenBonusPerHit, maxComboRegenMultiplier);
 
         private void Start()
@@ -60,7 +63,9 @@ namespace TheScorpion.Combat
             {
                 comboTimer -= Time.unscaledDeltaTime;
                 if (comboTimer <= 0f)
-                    comboCounter = 0;
+                {
+                    EndCombo();
+                }
             }
 
             // Combo regen bonus — higher combo = faster MP and stamina recovery
@@ -93,6 +98,10 @@ namespace TheScorpion.Combat
             if (ultimateSystem != null && ultimateSystem.IsUltimateActive)
                 damage.damageValue = Mathf.RoundToInt(damage.damageValue * ultimateSystem.GetDamageMultiplier());
 
+            // === 2b. Apply combo damage bonus (+5% at 3+ hits) ===
+            if (comboActive)
+                damage.damageValue = Mathf.RoundToInt(damage.damageValue * ComboDamageMultiplier);
+
             // === 3. Fire Aura burn on melee hit ===
             if (elementSystem != null && elementSystem.IsAbility2Active && elementSystem.ActiveElement == ElementType.Fire)
             {
@@ -113,6 +122,13 @@ namespace TheScorpion.Combat
             int currentAttackID = meleeManager.GetAttackID();
             comboCounter++;
             comboTimer = comboWindowTime;
+
+            // Activate combo at 3+ hits
+            if (!comboActive && comboCounter >= finisherThreshold)
+            {
+                comboActive = true;
+                Debug.Log($"[Scorpion] COMBO ACTIVE! +5% damage bonus");
+            }
 
             bool isFinisher = comboCounter >= finisherThreshold && currentAttackID != lastAttackID;
             lastAttackID = currentAttackID;
@@ -170,13 +186,40 @@ namespace TheScorpion.Combat
             if (styleMeter != null)
                 styleMeter.OnHitTaken();
 
-            // Reset combo
+            // Reset combo (no stamina refill — you got hit)
             comboCounter = 0;
             comboTimer = 0f;
+            comboActive = false;
 
             // Camera shake
             if (CameraShakeController.Instance != null)
                 CameraShakeController.Instance.ShakeOnHit();
+        }
+
+        private void EndCombo()
+        {
+            if (comboActive)
+            {
+                // Refill stamina on successful combo completion
+                if (playerMotor != null)
+                    playerMotor.ChangeStamina((int)playerMotor.maxStamina);
+
+                // Heal 10 HP if below 50% health
+                var health = GetComponent<Invector.vHealthController>();
+                if (health != null)
+                {
+                    float healthPct = health.currentHealth / health.MaxHealth;
+                    if (healthPct < 0.5f)
+                    {
+                        health.AddHealth(10);
+                        Debug.Log($"[Scorpion] Combo heal! +10 HP (was {healthPct * 100f:F0}%)");
+                    }
+                }
+
+                Debug.Log($"[Scorpion] Combo ended ({comboCounter} hits) — stamina refilled!");
+            }
+            comboCounter = 0;
+            comboActive = false;
         }
 
         private void OnDestroy()

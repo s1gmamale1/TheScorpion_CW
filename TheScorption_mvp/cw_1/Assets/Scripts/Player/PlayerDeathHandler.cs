@@ -29,6 +29,10 @@ namespace TheScorpion.Player
 
             if (onPlayerDiedEvent != null)
                 onPlayerDiedEvent.RaiseEvent();
+
+            // Direct fallback in case event wiring failed
+            if (GameManager.Instance != null)
+                GameManager.Instance.SetGameState(GameState.GameOver);
         }
     }
 }
