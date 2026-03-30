@@ -16,19 +16,19 @@ MonoBehaviour:
   elementName: Lightning
   elementColor: {r: 0.3, g: 0.7, b: 1, a: 1}
   ability1Name: Lightning Burst
-  ability1Damage: 10
+  ability1Damage: 11
   ability1Radius: 3
   ability1Cooldown: 6
-  ability1Cost: 35
+  ability1Cost: 50
   ability1Duration: 0
   ability2Name: Lightning Speed
   ability2Duration: 5
   ability2Cooldown: 15
-  ability2Cost: 50
+  ability2Cost: 40
   ability2BurnDamagePerTick: 5
   ability2AttackSpeedBonus: 0.4
   ability2MoveSpeedBonus: 0.25
-  burstDamage: 20
+  burstDamage: 22
   burstRadius: 12
   burstStunDuration: 2
   ability1VFXPrefab: {fileID: 1000011128802252, guid: 96730f8640590934eacb6f860058e7f9, type: 3}

@@ -94,7 +94,7 @@ namespace TheScorpion.Player
                 var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 go.name = activeElement == ElementType.Fire ? "Fireball" : "LightningBolt";
                 go.transform.position = spawnPos;
-                go.transform.localScale = Vector3.one * 0.3f;
+                go.transform.localScale = activeElement == ElementType.Fire ? Vector3.one * 0.5f : Vector3.one * 0.3f;
 
                 // Hide the sphere mesh — VFX will be the visual
                 var meshRenderer = go.GetComponent<MeshRenderer>();
@@ -288,6 +288,58 @@ namespace TheScorpion.Player
             return vfx;
         }
 
+        private void SpawnShockwaveVFX(float radius)
+        {
+            // Expanding transparent ring
+            var go = new GameObject("ShockwaveVFX");
+            go.transform.position = transform.position + Vector3.up * 0.2f;
+
+            // Transparent expanding particles
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.startLifetime = 0.6f;
+            main.startSpeed = radius * 3f;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.15f, 0.35f);
+            main.startColor = new Color(0.3f, 0.7f, 1f, 0.4f); // semi-transparent blue
+            main.maxParticles = 50;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+
+            var emission = ps.emission;
+            emission.rateOverTime = 0;
+            emission.SetBurst(0, new ParticleSystem.Burst(0f, 50));
+
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Circle;
+            shape.radius = 0.5f;
+
+            var sizeOverLife = ps.sizeOverLifetime;
+            sizeOverLife.enabled = true;
+            sizeOverLife.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0, 0.5f, 1, 2f));
+
+            var colorOverLife = ps.colorOverLifetime;
+            colorOverLife.enabled = true;
+            var grad = new Gradient();
+            grad.SetKeys(
+                new GradientColorKey[] { new GradientColorKey(new Color(0.5f, 0.8f, 1f), 0f), new GradientColorKey(new Color(0.2f, 0.4f, 1f), 1f) },
+                new GradientAlphaKey[] { new GradientAlphaKey(0.5f, 0f), new GradientAlphaKey(0f, 1f) } // fade from semi-transparent to invisible
+            );
+            colorOverLife.color = grad;
+
+            var renderer = go.GetComponent<ParticleSystemRenderer>();
+            renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+            renderer.material.SetFloat("_Mode", 2); // Fade mode
+            renderer.material.color = new Color(0.3f, 0.7f, 1f, 0.4f);
+
+            // Transparent flash light
+            var light = go.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = new Color(0.3f, 0.6f, 1f);
+            light.range = radius * 2f;
+            light.intensity = 4f;
+
+            Destroy(go, 1.5f);
+        }
+
         private IEnumerator FireTornado(ElementDataSO data)
         {
             SpawnVFXOnPlayer(data.ability1VFXPrefab, data.ability1Duration);
@@ -315,6 +367,7 @@ namespace TheScorpion.Player
         private void LightningBurst(ElementDataSO data)
         {
             SpawnVFXOnPlayer(data.ability1VFXPrefab, 2f);
+            SpawnShockwaveVFX(data.ability1Radius);
 
             Collider[] hits = Physics.OverlapSphere(transform.position, data.ability1Radius, LayerMask.GetMask("Enemy"));
             foreach (var hit in hits)

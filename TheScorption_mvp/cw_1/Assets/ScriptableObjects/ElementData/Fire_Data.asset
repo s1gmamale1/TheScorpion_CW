@@ -16,19 +16,19 @@ MonoBehaviour:
   elementName: Fire
   elementColor: {r: 1, g: 0.4, b: 0.1, a: 1}
   ability1Name: Fire Tornado
-  ability1Damage: 8
+  ability1Damage: 8.8
   ability1Radius: 4
   ability1Cooldown: 8
-  ability1Cost: 40
+  ability1Cost: 50
   ability1Duration: 3
   ability2Name: Fire Aura
   ability2Duration: 6
   ability2Cooldown: 12
-  ability2Cost: 30
-  ability2BurnDamagePerTick: 3
+  ability2Cost: 40
+  ability2BurnDamagePerTick: 3.3
   ability2AttackSpeedBonus: 0.4
   ability2MoveSpeedBonus: 0.25
-  burstDamage: 30
+  burstDamage: 33
   burstRadius: 8
   burstStunDuration: 0
   ability1VFXPrefab: {fileID: 1000010823978654, guid: 3228a22491941734bb83ad691d17fcb9, type: 3}
