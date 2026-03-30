@@ -22,8 +22,8 @@ namespace TheScorpion.Player
 
         [Header("Projectile")]
         [SerializeField] private float projectileCooldown = 0.5f;
-        [SerializeField] private float projectileEnergyCost = 10f;
-        [SerializeField] private float projectileDamage = 5f;
+        [SerializeField] private float projectileEnergyCost = 20f;
+        [SerializeField] private float projectileDamage = 5.5f;
         [SerializeField] private float projectileSpeed = 25f;
         [SerializeField] private GameObject fireProjectilePrefab;
         [SerializeField] private GameObject lightningProjectilePrefab;

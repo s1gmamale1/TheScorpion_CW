@@ -46,7 +46,7 @@ namespace TheScorpion.UI
         private void Init(Vector3 position, int damage, string element)
         {
             worldPos = position + Vector3.up * 2f;
-            lifetime = 1.2f;
+            lifetime = 2f; // slower fade (was 1.2)
             timer = 0f;
 
             // Pick color based on element
@@ -57,8 +57,8 @@ namespace TheScorpion.UI
             else
                 startColor = Color.white;
 
-            // Larger text for bigger hits
-            int fontSize = damage >= 30 ? 32 : damage >= 15 ? 26 : 20;
+            // Bigger text
+            int fontSize = damage >= 30 ? 48 : damage >= 15 ? 38 : 30;
 
             rect = gameObject.AddComponent<RectTransform>();
             rect.sizeDelta = new Vector2(120, 40);
@@ -92,8 +92,8 @@ namespace TheScorpion.UI
 
             float progress = timer / lifetime;
 
-            // Float upward
-            worldPos += Vector3.up * 1.5f * Time.unscaledDeltaTime;
+            // Float upward (slower)
+            worldPos += Vector3.up * 0.8f * Time.unscaledDeltaTime;
 
             // Convert world position to screen position
             var cam = UnityEngine.Camera.main;

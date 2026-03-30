@@ -26,6 +26,11 @@ namespace TheScorpion.Systems
         [SerializeField] private GameObject elementalNinjaPrefab;
         [SerializeField] private GameObject bossPrefab;
 
+        [Header("Heal Potions")]
+        [SerializeField] private GameObject healthPotionPrefab;
+        [SerializeField] private int potionsPerWave = 4;
+        [SerializeField] private float potionSpawnRadius = 12f;
+
         [Header("Enemy Data SOs")]
         [SerializeField] private EnemyDataSO basicEnemyData;
         [SerializeField] private EnemyDataSO fastEnemyData;
@@ -148,6 +153,9 @@ namespace TheScorpion.Systems
 
             if (onWaveChangedEvent != null)
                 onWaveChangedEvent.RaiseEvent(currentWaveIndex);
+
+            // Spawn heal potions for this wave
+            SpawnHealPotions();
 
             // Start continuous spawn loop
             if (spawnCoroutine != null)
@@ -396,6 +404,43 @@ namespace TheScorpion.Systems
             aliveCount++;
         }
 
+        private void SpawnHealPotions()
+        {
+            if (healthPotionPrefab == null)
+            {
+                Debug.LogWarning("[Wave] No health potion prefab assigned");
+                return;
+            }
+
+            var player = GetPlayer();
+            Vector3 center = player != null ? player.position : Vector3.zero;
+
+            for (int i = 0; i < potionsPerWave; i++)
+            {
+                // Random position around the arena
+                float angle = (i / (float)potionsPerWave) * 360f + Random.Range(-30f, 30f);
+                float rad = angle * Mathf.Deg2Rad;
+                float dist = Random.Range(potionSpawnRadius * 0.5f, potionSpawnRadius);
+                Vector3 pos = center + new Vector3(Mathf.Cos(rad) * dist, 0f, Mathf.Sin(rad) * dist);
+
+                // Snap to NavMesh
+                UnityEngine.AI.NavMeshHit navHit;
+                if (UnityEngine.AI.NavMesh.SamplePosition(pos, out navHit, 10f, UnityEngine.AI.NavMesh.AllAreas))
+                    pos = navHit.position;
+
+                pos.y += 0.5f; // float above ground
+
+                var potion = Instantiate(healthPotionPrefab, pos, Quaternion.identity);
+                potion.transform.localScale = new Vector3(0.177990004f, 0.177990004f, 0.177990004f);
+
+                // Add pickup behavior if not already on prefab
+                if (potion.GetComponent<HealPotionPickup>() == null)
+                    potion.AddComponent<HealPotionPickup>();
+            }
+
+            Debug.Log($"[Wave] Spawned {potionsPerWave} heal potions");
+        }
+
         private void RemoveInvectorHealthUI(GameObject enemy)
         {
             // Remove v_SpriteHealth component
@@ -433,11 +478,15 @@ namespace TheScorpion.Systems
             var player = GetPlayer();
             if (player == null) return;
 
-            // Invector Simple Melee AI uses SetCurrentTarget to force chase
             var aiController = enemy.GetComponent<Invector.vCharacterController.AI.vSimpleMeleeAI_Controller>();
             if (aiController != null)
             {
+                // Always aggressive — chase immediately, never idle
                 aiController.SetCurrentTarget(player);
+                aiController.agressiveAtFirstSight = true;
+                aiController.maxDetectDistance = 100f; // detect from anywhere
+                aiController.minDetectDistance = 100f;
+                aiController.fieldOfView = 360f; // see in all directions
             }
         }
 

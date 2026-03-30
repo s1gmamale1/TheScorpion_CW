@@ -452,10 +452,12 @@ public class DataAssetCreator
         var fire = AssetDatabase.LoadAssetAtPath<ElementDataSO>("Assets/ScriptableObjects/ElementData/Fire_Data.asset");
         if (fire != null)
         {
-            fire.ability1Damage = 8f;      // Fire Tornado: 8/tick × 3s = 24 total (was 15/tick = 45)
+            fire.ability1Damage = 8.8f;     // Fire Tornado: +10% (was 8)
+            fire.ability1Cost = 50f;         // +10 energy (was 40)
             fire.ability1Radius = 4f;
-            fire.ability2BurnDamagePerTick = 3f; // Aura burn: 3/tick (was 5)
-            fire.burstDamage = 30f;         // Ultimate burst (was 60)
+            fire.ability2BurnDamagePerTick = 3.3f; // Aura burn: +10% (was 3)
+            fire.ability2Cost = 40f;         // +10 energy (was 30)
+            fire.burstDamage = 33f;          // Ultimate burst: +10% (was 30)
             fire.burstRadius = 8f;
             EditorUtility.SetDirty(fire);
         }
@@ -463,9 +465,11 @@ public class DataAssetCreator
         var lightning = AssetDatabase.LoadAssetAtPath<ElementDataSO>("Assets/ScriptableObjects/ElementData/Lightning_Data.asset");
         if (lightning != null)
         {
-            lightning.ability1Damage = 10f;  // Lightning Burst: 10 instant (was 20)
+            lightning.ability1Damage = 11f;  // Lightning Burst: +10% (was 10)
+            lightning.ability1Cost = 50f;     // +10 energy (was 40)
             lightning.ability1Radius = 3f;
-            lightning.burstDamage = 20f;     // Ultimate burst (was 40)
+            lightning.ability2Cost = 40f;     // +10 energy (was 30)
+            lightning.burstDamage = 22f;      // Ultimate burst: +10% (was 20)
             lightning.burstRadius = 12f;
             lightning.burstStunDuration = 2f;
             EditorUtility.SetDirty(lightning);

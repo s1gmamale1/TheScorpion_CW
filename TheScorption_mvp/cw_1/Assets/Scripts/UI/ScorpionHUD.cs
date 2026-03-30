@@ -48,6 +48,10 @@ namespace TheScorpion.UI
         private Image adrenalineFillImage;
         private Text adrenalineReadyText;
 
+        // Potion counter
+        private Text potionCountText;
+        private PlayerInventory playerInventory;
+
         // Boss health bar
         private GameObject bossBarContainer;
         private RectTransform bossFillRect;
@@ -567,6 +571,11 @@ namespace TheScorpion.UI
                 new Vector2(0f, 0f), new Vector2(30, 35), new Vector2(100, 20),
                 "R: READY", 12, TextAnchor.MiddleLeft, new Color(0.2f, 1f, 0.4f));
 
+            // Potion counter — bottom left
+            potionCountText = MakeText(root, "PotionCount",
+                new Vector2(0f, 0f), new Vector2(30, 15), new Vector2(120, 20),
+                "[1] Potions: 0", 12, TextAnchor.MiddleLeft, new Color(0.2f, 1f, 0.4f));
+
             // Boss health bar — top center, hidden by default
             bossBarContainer = new GameObject("BossBar");
             bossBarContainer.transform.SetParent(root, false);
@@ -623,6 +632,8 @@ namespace TheScorpion.UI
                 damageInterceptor = FindAnyObjectByType<DamageInterceptor>();
             if (styleMeter == null)
                 styleMeter = FindAnyObjectByType<StyleMeter>();
+            if (playerInventory == null)
+                playerInventory = FindAnyObjectByType<PlayerInventory>();
 
             // Poll GameManager state
             if (GameManager.Instance != null && GameManager.Instance.CurrentState != lastKnownState)
@@ -819,6 +830,10 @@ namespace TheScorpion.UI
                     }
                 }
             }
+
+            // Potion counter
+            if (potionCountText != null && playerInventory != null)
+                potionCountText.text = $"[1] Potions: {playerInventory.HealthPotionCount}";
 
             // Boss health bar
             if (bossBarContainer != null)
