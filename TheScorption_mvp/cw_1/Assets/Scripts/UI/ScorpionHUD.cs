@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TheScorpion.Core;
+using TheScorpion.Combat;
+using TheScorpion.Enemy;
 using TheScorpion.Systems;
 using TheScorpion.Player;
 
@@ -28,18 +30,48 @@ namespace TheScorpion.UI
         // Game Over / Victory stats
         private Text gameOverWaveText, gameOverKillsText, gameOverTimeText;
         private Text victoryKillsText, victoryTimeText;
+        private CanvasGroup gameOverGroup;
+        private Coroutine gameOverFadeCR;
 
         // Settings
         private Text volumeValueText, sensitivityValueText;
         private bool settingsOpenedFromPause;
 
+        // Gameplay HUD elements
+        private Text waveCounterText;
+        private Text comboCounterText;
+        private Text styleRankText;
+        private Text elementIndicatorText;
+        private Text ability1CooldownText;
+        private Text ability2CooldownText;
+        private RectTransform adrenalineFillRect;
+        private Image adrenalineFillImage;
+        private Text adrenalineReadyText;
+
+        // Boss health bar
+        private GameObject bossBarContainer;
+        private RectTransform bossFillRect;
+        private Text bossNameText;
+        private Text bossPhaseText;
+        private BossController bossController;
+
+        // Combo/style animation state
+        private int prevComboCount;
+        private StyleRank prevStyleRank = StyleRank.D;
+        private Coroutine comboPunchCR;
+        private Coroutine stylePunchCR;
+
         private ElementSystem elementSystem;
+        private Player.UltimateSystem ultimateSystem;
+        private Combat.DamageInterceptor damageInterceptor;
+        private Player.StyleMeter styleMeter;
 
         private void Start()
         {
             HideInvectorWatermark();
             CreateCanvas();
             CreateWaveAnnouncement();
+            CreateGameplayHUD();
             CreateStartScreen();
             CreatePauseMenu();
             CreateSettingsPanel();
@@ -75,7 +107,6 @@ namespace TheScorpion.UI
 
             startPanel.SetActive(state == GameState.PreGame);
             pausePanel.SetActive(state == GameState.Paused);
-            gameOverPanel.SetActive(state == GameState.GameOver);
             victoryPanel.SetActive(state == GameState.Victory);
 
             if (state == GameState.GameOver)
@@ -86,8 +117,23 @@ namespace TheScorpion.UI
                 gameOverWaveText.text = $"Wave Reached: {wave}";
                 gameOverKillsText.text = $"Enemies Slain: {kills}";
                 gameOverTimeText.text = $"Time: {time}";
+
+                // Fade in the game over screen
+                if (!gameOverPanel.activeSelf)
+                {
+                    gameOverPanel.SetActive(true);
+                    gameOverGroup.alpha = 0f;
+                    gameOverGroup.blocksRaycasts = false;
+                    if (gameOverFadeCR != null) StopCoroutine(gameOverFadeCR);
+                    gameOverFadeCR = StartCoroutine(FadeInGameOver());
+                }
             }
-            else if (state == GameState.Victory)
+            else
+            {
+                gameOverPanel.SetActive(false);
+            }
+
+            if (state == GameState.Victory)
             {
                 int kills = GameManager.Instance != null ? GameManager.Instance.TotalKills : 0;
                 string time = GameManager.Instance != null ? GameManager.Instance.GetFormattedTime() : "00:00";
@@ -339,9 +385,12 @@ namespace TheScorpion.UI
         {
             gameOverPanel = CreatePanel("GameOverPanel");
             gameOverPanel.SetActive(false);
+            gameOverGroup = gameOverPanel.AddComponent<CanvasGroup>();
+            gameOverGroup.alpha = 0f;
 
+            // Semi-transparent — game still visible behind
             var bg = gameOverPanel.GetComponent<Image>();
-            bg.color = new Color(0.15f, 0, 0, 0.85f);
+            bg.color = new Color(0.05f, 0, 0, 0.6f);
 
             MakeText(gameOverPanel.transform, "Title",
                 new Vector2(0.5f, 0.5f), new Vector2(0, 130), new Vector2(600, 100),
@@ -443,24 +492,146 @@ namespace TheScorpion.UI
                 "Eliminate all enemies", 15, TextAnchor.MiddleCenter, new Color(0.6f, 0.6f, 0.6f));
         }
 
+        // ==================== GAMEPLAY HUD ====================
+        private void CreateGameplayHUD()
+        {
+            // Wave counter — top center
+            waveCounterText = MakeText(root, "WaveCounter",
+                new Vector2(0.5f, 1f), new Vector2(0, -15), new Vector2(400, 30),
+                "", 18, TextAnchor.MiddleCenter, new Color(0.8f, 0.8f, 0.8f));
+
+            // Element indicator — top center below wave
+            elementIndicatorText = MakeText(root, "ElementIndicator",
+                new Vector2(0.5f, 1f), new Vector2(0, -40), new Vector2(200, 26),
+                "FIRE", 20, TextAnchor.MiddleCenter, new Color(1f, 0.4f, 0.1f));
+
+            // Style rank — right side
+            styleRankText = MakeText(root, "StyleRank",
+                new Vector2(1f, 0.5f), new Vector2(-40, 50), new Vector2(80, 70),
+                "D", 56, TextAnchor.MiddleCenter, new Color(0.5f, 0.5f, 0.5f));
+
+            // Combo counter — right side below style rank
+            comboCounterText = MakeText(root, "ComboCounter",
+                new Vector2(1f, 0.5f), new Vector2(-70, -10), new Vector2(200, 40),
+                "", 28, TextAnchor.MiddleCenter, new Color(1f, 0.85f, 0.2f));
+            comboCounterText.gameObject.SetActive(false);
+
+            // Adrenaline bar — bottom center
+            var adrBarContainer = new GameObject("AdrenalineBar");
+            adrBarContainer.transform.SetParent(root, false);
+            var adrRect = adrBarContainer.AddComponent<RectTransform>();
+            adrRect.anchorMin = new Vector2(0.3f, 0f);
+            adrRect.anchorMax = new Vector2(0.7f, 0f);
+            adrRect.pivot = new Vector2(0.5f, 0f);
+            adrRect.anchoredPosition = new Vector2(0, 20);
+            adrRect.sizeDelta = new Vector2(0, 14);
+
+            // Adr label
+            MakeText(adrBarContainer.transform, "AdrLabel",
+                new Vector2(0f, 0.5f), new Vector2(-35, 0), new Vector2(60, 14),
+                "ULT", 10, TextAnchor.MiddleRight, new Color(1f, 0.85f, 0.2f));
+
+            // Adr background
+            var adrBg = new GameObject("AdrBg");
+            adrBg.transform.SetParent(adrBarContainer.transform, false);
+            var adrBgRect = adrBg.AddComponent<RectTransform>();
+            adrBgRect.anchorMin = Vector2.zero;
+            adrBgRect.anchorMax = Vector2.one;
+            adrBgRect.offsetMin = Vector2.zero;
+            adrBgRect.offsetMax = Vector2.zero;
+            adrBg.AddComponent<Image>().color = new Color(0.08f, 0.05f, 0.02f, 0.9f);
+
+            // Adr fill
+            var adrFill = new GameObject("AdrFill");
+            adrFill.transform.SetParent(adrBarContainer.transform, false);
+            adrenalineFillRect = adrFill.AddComponent<RectTransform>();
+            adrenalineFillRect.anchorMin = Vector2.zero;
+            adrenalineFillRect.anchorMax = new Vector2(0f, 1f); // starts empty
+            adrenalineFillRect.offsetMin = new Vector2(1, 1);
+            adrenalineFillRect.offsetMax = new Vector2(-1, -1);
+            adrenalineFillImage = adrFill.AddComponent<Image>();
+            adrenalineFillImage.color = new Color(0.4f, 0.1f, 0.1f);
+
+            // "ULTIMATE READY" text
+            adrenalineReadyText = MakeText(adrBarContainer.transform, "ReadyText",
+                new Vector2(0.5f, 0.5f), new Vector2(0, 14), new Vector2(200, 20),
+                "ULTIMATE READY [V]", 12, TextAnchor.MiddleCenter, new Color(1f, 0.85f, 0.2f));
+            adrenalineReadyText.gameObject.SetActive(false);
+
+            // Ability cooldowns — bottom left above energy bar area
+            ability1CooldownText = MakeText(root, "Ability1CD",
+                new Vector2(0f, 0f), new Vector2(30, 55), new Vector2(100, 20),
+                "F: READY", 12, TextAnchor.MiddleLeft, new Color(0.2f, 1f, 0.4f));
+
+            ability2CooldownText = MakeText(root, "Ability2CD",
+                new Vector2(0f, 0f), new Vector2(30, 35), new Vector2(100, 20),
+                "R: READY", 12, TextAnchor.MiddleLeft, new Color(0.2f, 1f, 0.4f));
+
+            // Boss health bar — top center, hidden by default
+            bossBarContainer = new GameObject("BossBar");
+            bossBarContainer.transform.SetParent(root, false);
+            var bossRect = bossBarContainer.AddComponent<RectTransform>();
+            bossRect.anchorMin = new Vector2(0.2f, 1f);
+            bossRect.anchorMax = new Vector2(0.8f, 1f);
+            bossRect.pivot = new Vector2(0.5f, 1f);
+            bossRect.anchoredPosition = new Vector2(0, -60);
+            bossRect.sizeDelta = new Vector2(0, 20);
+
+            // Boss name
+            bossNameText = MakeText(bossBarContainer.transform, "BossName",
+                new Vector2(0.5f, 1f), new Vector2(0, 12), new Vector2(400, 20),
+                "THE FALLEN GUARDIAN", 16, TextAnchor.MiddleCenter, new Color(0.9f, 0.2f, 0.15f));
+
+            // Phase text
+            bossPhaseText = MakeText(bossBarContainer.transform, "BossPhase",
+                new Vector2(1f, 1f), new Vector2(-5, 12), new Vector2(120, 20),
+                "", 12, TextAnchor.MiddleRight, new Color(0.8f, 0.6f, 0.2f));
+
+            // Bar bg
+            var bossBg = new GameObject("BossBg");
+            bossBg.transform.SetParent(bossBarContainer.transform, false);
+            var bossBgRect = bossBg.AddComponent<RectTransform>();
+            bossBgRect.anchorMin = Vector2.zero;
+            bossBgRect.anchorMax = Vector2.one;
+            bossBgRect.offsetMin = Vector2.zero;
+            bossBgRect.offsetMax = Vector2.zero;
+            bossBg.AddComponent<Image>().color = new Color(0.1f, 0.02f, 0.02f, 0.9f);
+
+            // Bar fill
+            var bossFill = new GameObject("BossFill");
+            bossFill.transform.SetParent(bossBarContainer.transform, false);
+            bossFillRect = bossFill.AddComponent<RectTransform>();
+            bossFillRect.anchorMin = Vector2.zero;
+            bossFillRect.anchorMax = Vector2.one;
+            bossFillRect.offsetMin = new Vector2(2, 2);
+            bossFillRect.offsetMax = new Vector2(-2, -2);
+            bossFill.AddComponent<Image>().color = new Color(0.8f, 0.15f, 0.1f);
+
+            bossBarContainer.SetActive(false);
+        }
+
         private GameState lastKnownState = GameState.PreGame;
 
         private void Update()
         {
+            // Find player system references directly by type
             if (elementSystem == null)
-            {
-                var player = GameObject.FindGameObjectWithTag("Player");
-                if (player != null)
-                    elementSystem = player.GetComponent<ElementSystem>();
-            }
+                elementSystem = FindAnyObjectByType<ElementSystem>();
+            if (ultimateSystem == null)
+                ultimateSystem = FindAnyObjectByType<UltimateSystem>();
+            if (damageInterceptor == null)
+                damageInterceptor = FindAnyObjectByType<DamageInterceptor>();
+            if (styleMeter == null)
+                styleMeter = FindAnyObjectByType<StyleMeter>();
 
-            // Fallback: poll GameManager state in case event didn't fire
+            // Poll GameManager state
             if (GameManager.Instance != null && GameManager.Instance.CurrentState != lastKnownState)
             {
                 lastKnownState = GameManager.Instance.CurrentState;
                 RefreshPanels();
             }
 
+            // Wave announcement
             if (WaveManager.Instance != null)
             {
                 int w = WaveManager.Instance.CurrentWave;
@@ -470,6 +641,213 @@ namespace TheScorpion.UI
                     lastWave = w;
                     if (_annCR != null) StopCoroutine(_annCR);
                     _annCR = StartCoroutine(AnnounceWave(w, t));
+                }
+            }
+
+            UpdateGameplayHUD();
+        }
+
+        private void UpdateGameplayHUD()
+        {
+            // Wave counter
+            if (waveCounterText != null && WaveManager.Instance != null)
+            {
+                int w = WaveManager.Instance.CurrentWave;
+                int t = WaveManager.Instance.TotalWaves;
+                int alive = WaveManager.Instance.EnemiesAlive;
+                waveCounterText.text = w > 0 ? $"WAVE {w}/{t}  |  Enemies: {alive}" : "";
+            }
+
+            // Adrenaline bar
+            if (adrenalineFillRect != null && ultimateSystem != null)
+            {
+                float fill = ultimateSystem.AdrenalineNormalized;
+                adrenalineFillRect.anchorMax = new Vector2(fill, adrenalineFillRect.anchorMax.y);
+
+                if (adrenalineFillImage != null)
+                {
+                    if (fill < 0.5f)
+                        adrenalineFillImage.color = Color.Lerp(new Color(0.4f, 0.1f, 0.1f), new Color(0.9f, 0.5f, 0.1f), fill * 2f);
+                    else
+                        adrenalineFillImage.color = Color.Lerp(new Color(0.9f, 0.5f, 0.1f), new Color(1f, 0.85f, 0.2f), (fill - 0.5f) * 2f);
+                }
+
+                if (adrenalineReadyText != null)
+                {
+                    bool ready = ultimateSystem.IsUltimateReady;
+                    adrenalineReadyText.gameObject.SetActive(ready);
+                    if (ready)
+                    {
+                        float pulse = (Mathf.Sin(Time.unscaledTime * 4f) + 1f) * 0.5f;
+                        adrenalineReadyText.color = new Color(1f, 0.85f, 0.2f, 0.6f + pulse * 0.4f);
+                    }
+                }
+            }
+
+            // Combo counter with punch animation
+            if (comboCounterText != null && damageInterceptor != null)
+            {
+                int combo = damageInterceptor.ComboCounter;
+                if (combo >= 3)
+                {
+                    comboCounterText.gameObject.SetActive(true);
+                    bool isFinisher = damageInterceptor.IsComboActive;
+                    comboCounterText.text = isFinisher ? $"{combo}x COMBO!" : $"{combo}x COMBO";
+
+                    // Punch on new hit
+                    if (combo != prevComboCount && combo > prevComboCount)
+                    {
+                        if (comboPunchCR != null) StopCoroutine(comboPunchCR);
+                        float punchSize = isFinisher ? 1.8f : 1.4f;
+                        comboPunchCR = StartCoroutine(PunchScale(comboCounterText.transform, punchSize, 0.2f));
+                        // Flash white then back to gold
+                        comboCounterText.color = Color.white;
+                    }
+                    else
+                    {
+                        // Settle to gold with subtle pulse
+                        float pulse = 1f + Mathf.Sin(Time.unscaledTime * 3f) * 0.03f;
+                        if (comboPunchCR == null) // don't override punch
+                            comboCounterText.transform.localScale = Vector3.one * pulse;
+                        comboCounterText.color = Color.Lerp(comboCounterText.color, new Color(1f, 0.85f, 0.2f), 5f * Time.unscaledDeltaTime);
+                    }
+                }
+                else if (prevComboCount >= 3 && combo < 3)
+                {
+                    // Combo broke — shrink out
+                    if (comboPunchCR != null) StopCoroutine(comboPunchCR);
+                    comboPunchCR = StartCoroutine(ShrinkOut(comboCounterText));
+                }
+                prevComboCount = combo;
+            }
+
+            // Style rank with punch on rank-up
+            if (styleRankText != null && styleMeter != null)
+            {
+                StyleRank rank = styleMeter.CurrentRank;
+                Color rankColor;
+                switch (rank)
+                {
+                    case StyleRank.C: rankColor = new Color(0.4f, 0.7f, 1f); break;
+                    case StyleRank.B: rankColor = new Color(0.2f, 1f, 0.4f); break;
+                    case StyleRank.A: rankColor = new Color(1f, 0.6f, 0.1f); break;
+                    case StyleRank.S: rankColor = new Color(1f, 0.85f, 0.2f); break;
+                    default: rankColor = new Color(0.5f, 0.5f, 0.5f); break;
+                }
+
+                styleRankText.text = rank.ToString();
+
+                // Punch on rank up
+                if (rank != prevStyleRank)
+                {
+                    if (rank > prevStyleRank)
+                    {
+                        // Ranked up — big punch + flash white
+                        if (stylePunchCR != null) StopCoroutine(stylePunchCR);
+                        stylePunchCR = StartCoroutine(PunchScale(styleRankText.transform, 2f, 0.3f));
+                        styleRankText.color = Color.white;
+                    }
+                    else
+                    {
+                        // Ranked down — quick shrink
+                        if (stylePunchCR != null) StopCoroutine(stylePunchCR);
+                        stylePunchCR = StartCoroutine(PunchScale(styleRankText.transform, 0.6f, 0.15f));
+                    }
+                    prevStyleRank = rank;
+                }
+                else
+                {
+                    // Settle to rank color
+                    styleRankText.color = Color.Lerp(styleRankText.color, rankColor, 4f * Time.unscaledDeltaTime);
+                    // S rank gets a glow pulse
+                    if (rank == StyleRank.S && stylePunchCR == null)
+                    {
+                        float glow = 1f + Mathf.Sin(Time.unscaledTime * 4f) * 0.08f;
+                        styleRankText.transform.localScale = Vector3.one * glow;
+                    }
+                }
+            }
+
+            // Element indicator
+            if (elementIndicatorText != null && elementSystem != null)
+            {
+                var elem = elementSystem.ActiveElement;
+                if (elem == ElementType.Fire)
+                {
+                    elementIndicatorText.text = "FIRE";
+                    elementIndicatorText.color = new Color(1f, 0.4f, 0.1f);
+                }
+                else if (elem == ElementType.Lightning)
+                {
+                    elementIndicatorText.text = "LIGHTNING";
+                    elementIndicatorText.color = new Color(0.3f, 0.7f, 1f);
+                }
+            }
+
+            // Ability cooldowns
+            if (elementSystem != null)
+            {
+                var data = elementSystem.GetActiveData();
+                if (ability1CooldownText != null)
+                {
+                    float cd1 = elementSystem.Ability1CooldownNormalized;
+                    if (cd1 > 0.01f)
+                    {
+                        float secs = data != null ? cd1 * data.ability1Cooldown : 0;
+                        ability1CooldownText.text = $"F: {secs:F0}s";
+                        ability1CooldownText.color = new Color(0.6f, 0.6f, 0.6f);
+                    }
+                    else
+                    {
+                        ability1CooldownText.text = "F: READY";
+                        ability1CooldownText.color = new Color(0.2f, 1f, 0.4f);
+                    }
+                }
+                if (ability2CooldownText != null)
+                {
+                    float cd2 = elementSystem.Ability2CooldownNormalized;
+                    if (cd2 > 0.01f)
+                    {
+                        float secs = data != null ? cd2 * data.ability2Cooldown : 0;
+                        ability2CooldownText.text = $"R: {secs:F0}s";
+                        ability2CooldownText.color = new Color(0.6f, 0.6f, 0.6f);
+                    }
+                    else
+                    {
+                        ability2CooldownText.text = "R: READY";
+                        ability2CooldownText.color = new Color(0.2f, 1f, 0.4f);
+                    }
+                }
+            }
+
+            // Boss health bar
+            if (bossBarContainer != null)
+            {
+                if (bossController == null)
+                    bossController = FindAnyObjectByType<BossController>();
+
+                if (bossController != null && bossController.CurrentPhase != BossController.BossPhase.Dead)
+                {
+                    bossBarContainer.SetActive(true);
+                    var bossHealth = bossController.GetComponent<Invector.vHealthController>();
+                    if (bossHealth != null && bossFillRect != null)
+                    {
+                        float fill = bossHealth.currentHealth / bossHealth.MaxHealth;
+                        bossFillRect.anchorMax = new Vector2(Mathf.Clamp01(fill), bossFillRect.anchorMax.y);
+                    }
+                    if (bossPhaseText != null)
+                    {
+                        switch (bossController.CurrentPhase)
+                        {
+                            case BossController.BossPhase.Phase1: bossPhaseText.text = "Phase 1"; break;
+                            case BossController.BossPhase.Phase2: bossPhaseText.text = "Phase 2 — Fire"; bossPhaseText.color = new Color(1f, 0.4f, 0.1f); break;
+                            case BossController.BossPhase.Phase3: bossPhaseText.text = "Phase 3 — ENRAGED"; bossPhaseText.color = new Color(1f, 0.15f, 0.1f); break;
+                        }
+                    }
+                }
+                else
+                {
+                    bossBarContainer.SetActive(false);
                 }
             }
         }
@@ -500,6 +878,81 @@ namespace TheScorpion.UI
                 yield return null;
             }
             waveAnnounceGroup.alpha = 0f;
+        }
+
+        // ==================== GAME OVER FADE ====================
+        private System.Collections.IEnumerator FadeInGameOver()
+        {
+            // Slow fade over 3 seconds
+            float duration = 3f;
+            float elapsed = 0f;
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = elapsed / duration;
+                // Ease in — slow start, faster at end
+                float alpha = t * t;
+                gameOverGroup.alpha = alpha;
+                yield return null;
+            }
+
+            gameOverGroup.alpha = 1f;
+            gameOverGroup.blocksRaycasts = true; // enable buttons after fade completes
+        }
+
+        // ==================== UI ANIMATIONS ====================
+
+        /// <summary>
+        /// Elastic punch scale — overshoots then bounces back to 1.0.
+        /// Used for combo counter hits and style rank changes.
+        /// </summary>
+        private System.Collections.IEnumerator PunchScale(Transform target, float punchSize, float duration)
+        {
+            float elapsed = 0f;
+            Vector3 baseScale = Vector3.one;
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = elapsed / duration;
+
+                // Elastic ease out: overshoots then settles
+                float elastic = 1f - Mathf.Cos(t * Mathf.PI * 2.5f) * Mathf.Pow(1f - t, 3f);
+                float scale = Mathf.LerpUnclamped(punchSize, 1f, elastic);
+
+                target.localScale = baseScale * scale;
+                yield return null;
+            }
+
+            target.localScale = baseScale;
+            // Clear the coroutine reference
+            if (target == comboCounterText?.transform) comboPunchCR = null;
+            if (target == styleRankText?.transform) stylePunchCR = null;
+        }
+
+        /// <summary>
+        /// Shrink and fade out — used when combo breaks.
+        /// </summary>
+        private System.Collections.IEnumerator ShrinkOut(Text text)
+        {
+            float duration = 0.25f;
+            float elapsed = 0f;
+            Color startColor = text.color;
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = elapsed / duration;
+                text.transform.localScale = Vector3.one * (1f - t);
+                text.color = new Color(startColor.r, startColor.g, startColor.b, 1f - t);
+                yield return null;
+            }
+
+            text.gameObject.SetActive(false);
+            text.transform.localScale = Vector3.one;
+            text.color = new Color(startColor.r, startColor.g, startColor.b, 1f);
+            comboPunchCR = null;
         }
 
         // ==================== MOUSE SENSITIVITY ====================

@@ -2,6 +2,7 @@ using UnityEngine;
 using Invector.vMelee;
 using TheScorpion.Core;
 using TheScorpion.Player;
+using TheScorpion.UI;
 using TheScorpion.VFX;
 
 namespace TheScorpion.Combat
@@ -90,17 +91,23 @@ namespace TheScorpion.Combat
 
             var damage = hitInfo.attackObject.damage;
 
+            // Store original base damage so we don't permanently modify the weapon
+            float baseDamage = damage.damageValue;
+
             // === 1. Apply active element to melee damage ===
             if (elementSystem != null && elementSystem.ActiveElement != ElementType.None)
                 damage.damageType = elementSystem.ActiveElement.ToString();
 
-            // === 2. Apply ultimate damage multiplier ===
-            if (ultimateSystem != null && ultimateSystem.IsUltimateActive)
-                damage.damageValue = Mathf.RoundToInt(damage.damageValue * ultimateSystem.GetDamageMultiplier());
+            // === 2. Calculate final damage from base (don't compound multipliers) ===
+            float finalDamage = baseDamage;
 
-            // === 2b. Apply combo damage bonus (+5% at 3+ hits) ===
+            if (ultimateSystem != null && ultimateSystem.IsUltimateActive)
+                finalDamage *= ultimateSystem.GetDamageMultiplier();
+
             if (comboActive)
-                damage.damageValue = Mathf.RoundToInt(damage.damageValue * ComboDamageMultiplier);
+                finalDamage *= ComboDamageMultiplier;
+
+            damage.damageValue = Mathf.RoundToInt(finalDamage);
 
             // === 3. Fire Aura burn on melee hit ===
             if (elementSystem != null && elementSystem.IsAbility2Active && elementSystem.ActiveElement == ElementType.Fire)
@@ -166,7 +173,15 @@ namespace TheScorpion.Combat
                 onDamageDealtEvent.RaiseEvent(data);
             }
 
-            // === 9. Camera shake ===
+            // === 9. Damage popup ===
+            if (hitInfo.targetCollider != null)
+            {
+                Vector3 popupPos = hitInfo.targetCollider.transform.root.position;
+                string elem = damage.damageType ?? "";
+                DamagePopup.Spawn(popupPos, (int)damage.damageValue, elem);
+            }
+
+            // === 10. Camera shake ===
             if (CameraShakeController.Instance != null)
             {
                 if (isFinisher)
@@ -174,6 +189,9 @@ namespace TheScorpion.Combat
                 else
                     CameraShakeController.Instance.ShakeOnAttack();
             }
+
+            // === 11. Restore base damage so weapon isn't permanently modified ===
+            damage.damageValue = baseDamage;
         }
 
         private void OnPlayerTookDamage(Invector.vDamage damage)

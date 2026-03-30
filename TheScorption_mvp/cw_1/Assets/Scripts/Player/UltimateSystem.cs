@@ -15,10 +15,10 @@ namespace TheScorpion.Player
         [SerializeField] private float attackSpeedBonus = 0.3f;
 
         [Header("Adrenaline Gain")]
-        [SerializeField] private float adrenalinePerHit = 2f;
-        [SerializeField] private float adrenalinePerKill = 5f;
-        [SerializeField] private float adrenalinePerFinisher = 10f;
-        [SerializeField] private float adrenalineOnDamageTaken = 1f;
+        [SerializeField] private float adrenalinePerHit = 1.2f;
+        [SerializeField] private float adrenalinePerKill = 3f;
+        [SerializeField] private float adrenalinePerFinisher = 6f;
+        [SerializeField] private float adrenalineOnDamageTaken = 0.5f;
 
         [Header("References")]
         [SerializeField] private ElementSystem elementSystem;
@@ -97,14 +97,12 @@ namespace TheScorpion.Player
             currentAdrenaline = 0f;
 
             // === ACTIVATION VFX ===
-            // Camera shake on activation
             if (VFX.CameraShakeController.Instance != null)
                 VFX.CameraShakeController.Instance.ShakeHeavy();
 
-            // Activation flash — expanding ring of light
             SpawnActivationVFX();
 
-            // Slow-mo
+            // === SLOW-MO ===
             Time.timeScale = timeSlowFactor;
             Time.fixedDeltaTime = 0.02f * timeSlowFactor;
 
@@ -114,7 +112,21 @@ namespace TheScorpion.Player
                 playerAnimator.speed = 1f + attackSpeedBonus;
             }
 
-            // Aura glow during ultimate
+            // Boost player movement to compensate for time slow
+            // At timeScale 0.5, multiply speed by 1/0.5 = 2x so player moves at normal speed
+            var motor = GetComponent<Invector.vCharacterController.vThirdPersonController>();
+            float origWalk = 0f, origRun = 0f, origSprint = 0f;
+            if (motor != null)
+            {
+                origWalk = motor.freeSpeed.walkSpeed;
+                origRun = motor.freeSpeed.runningSpeed;
+                origSprint = motor.freeSpeed.sprintSpeed;
+                float speedCompensation = 1f / timeSlowFactor;
+                motor.freeSpeed.walkSpeed *= speedCompensation;
+                motor.freeSpeed.runningSpeed *= speedCompensation;
+                motor.freeSpeed.sprintSpeed *= speedCompensation;
+            }
+
             var auraGO = SpawnUltimateAura();
 
             Debug.Log($"[Scorpion] ULTIMATE ACTIVATED! {ultimateDuration}s — x{damageMultiplier} damage, +{attackSpeedBonus * 100}% speed");
@@ -124,9 +136,9 @@ namespace TheScorpion.Player
             // === BURST FINALE ===
             PerformElementalBurst();
 
-            // Destroy aura
             if (auraGO != null) Destroy(auraGO);
 
+            // Restore everything
             Time.timeScale = 1f;
             Time.fixedDeltaTime = 0.02f;
 
@@ -134,6 +146,13 @@ namespace TheScorpion.Player
             {
                 playerAnimator.updateMode = AnimatorUpdateMode.Normal;
                 playerAnimator.speed = 1f;
+            }
+
+            if (motor != null)
+            {
+                motor.freeSpeed.walkSpeed = origWalk;
+                motor.freeSpeed.runningSpeed = origRun;
+                motor.freeSpeed.sprintSpeed = origSprint;
             }
 
             isUltimateActive = false;

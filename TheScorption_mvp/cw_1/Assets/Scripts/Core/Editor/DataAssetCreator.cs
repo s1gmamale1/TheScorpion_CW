@@ -508,6 +508,58 @@ public class DataAssetCreator
         Debug.Log("[Scorpion] REBALANCED: Monk HP=60, Acolyte HP=40, Sentinel HP=120, Boss HP=500 | Projectile=5, FireTornado=8/tick, LBurst=10, FireBurst=30, LBurst=20");
     }
 
+    [MenuItem("Tools/Scorpion/Create Elemental Ninja Data + Wire")]
+    public static void CreateElementalNinja()
+    {
+        // Create SO
+        string path = "Assets/ScriptableObjects/EnemyData/ElementalNinja_Data.asset";
+        var existing = AssetDatabase.LoadAssetAtPath<EnemyDataSO>(path);
+        if (existing == null)
+        {
+            var ninja = ScriptableObject.CreateInstance<EnemyDataSO>();
+            ninja.enemyName = "Elemental Ninja";
+            ninja.enemyType = TheScorpion.Core.EnemyType.Elemental;
+            ninja.maxHealth = 50;
+            ninja.moveSpeed = 4f;
+            ninja.attackDamage = 8;
+            ninja.attackRange = 10f;
+            ninja.poiseMax = 10f;
+            ninja.fireResistance = 0.3f;
+            ninja.lightningResistance = 0.3f;
+            ninja.stunDurationMultiplier = 1.2f;
+            ninja.maxAttackCount = 1;
+            ninja.minTimeBetweenAttacks = 2f;
+            ninja.maxTimeBetweenAttacks = 4f;
+            ninja.adrenalineOnKill = 8;
+            AssetDatabase.CreateAsset(ninja, path);
+            Debug.Log("[Scorpion] Created ElementalNinja_Data.asset");
+        }
+        else
+        {
+            Debug.Log("[Scorpion] ElementalNinja_Data.asset already exists");
+        }
+
+        // Wire to WaveManager — use basic prefab as base (same model, behavior added at runtime)
+        var waveManager = Object.FindAnyObjectByType<TheScorpion.Systems.WaveManager>();
+        if (waveManager != null)
+        {
+            var so = new SerializedObject(waveManager);
+            var ninjaData = AssetDatabase.LoadAssetAtPath<EnemyDataSO>(path);
+            so.FindProperty("elementalNinjaData").objectReferenceValue = ninjaData;
+
+            // Use basic prefab as elemental ninja prefab (same model, different behavior)
+            var basicPrefab = so.FindProperty("basicEnemyPrefab").objectReferenceValue;
+            so.FindProperty("elementalNinjaPrefab").objectReferenceValue = basicPrefab;
+
+            so.ApplyModifiedProperties();
+            EditorUtility.SetDirty(waveManager);
+            Debug.Log("[Scorpion] Wired ElementalNinja to WaveManager (uses basic prefab + ElementalNinjaBehavior at runtime)");
+        }
+
+        AssetDatabase.SaveAssets();
+    }
+
+
     private static void CreateAsset(Object asset, string path)
     {
         var existing = AssetDatabase.LoadAssetAtPath<Object>(path);

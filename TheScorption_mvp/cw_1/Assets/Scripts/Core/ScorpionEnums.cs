@@ -21,6 +21,7 @@ namespace TheScorpion.Core
         Basic,      // Hollow Monk
         Fast,       // Shadow Acolyte
         Heavy,      // Stone Sentinel
+        Elemental,  // Elemental Ninja
         Boss        // The Fallen Guardian
     }
 

@@ -88,7 +88,7 @@ namespace TheScorpion.Core
                     break;
 
                 case GameState.GameOver:
-                    Time.timeScale = 0f;
+                    // Don't freeze — let the world keep running behind the overlay
                     ShowCursor();
                     break;
 

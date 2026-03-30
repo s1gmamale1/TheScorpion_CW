@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using TheScorpion.Core;
 using TheScorpion.Data;
 using TheScorpion.Enemy;
+using TheScorpion.UI;
 
 namespace TheScorpion.Systems
 {
@@ -22,12 +23,14 @@ namespace TheScorpion.Systems
         [SerializeField] private GameObject basicEnemyPrefab;
         [SerializeField] private GameObject fastEnemyPrefab;
         [SerializeField] private GameObject heavyEnemyPrefab;
+        [SerializeField] private GameObject elementalNinjaPrefab;
         [SerializeField] private GameObject bossPrefab;
 
         [Header("Enemy Data SOs")]
         [SerializeField] private EnemyDataSO basicEnemyData;
         [SerializeField] private EnemyDataSO fastEnemyData;
         [SerializeField] private EnemyDataSO heavyEnemyData;
+        [SerializeField] private EnemyDataSO elementalNinjaData;
         [SerializeField] private EnemyDataSO bossData;
 
         [Header("Event Channels")]
@@ -58,10 +61,45 @@ namespace TheScorpion.Systems
         public int EnemiesAlive => aliveCount;
         public bool IsWaveInProgress => waveInProgress;
         public int TotalKillsAllWaves { get; private set; }
+        public bool WavesEnabled { get; private set; } = true;
 
         public void StartFirstWave()
         {
+            WavesEnabled = true;
             StartCoroutine(StartWaveAfterDelay(delayBetweenWaves));
+        }
+
+        /// <summary>
+        /// Stop spawning new enemies. Current alive enemies remain.
+        /// </summary>
+        public void DisableWaves()
+        {
+            WavesEnabled = false;
+            if (spawnCoroutine != null)
+                StopCoroutine(spawnCoroutine);
+            waveInProgress = false;
+            Debug.Log("[Wave] Waves DISABLED — no more spawns");
+        }
+
+        /// <summary>
+        /// Resume wave spawning from where it left off.
+        /// </summary>
+        public void EnableWaves()
+        {
+            WavesEnabled = true;
+            if (!waveInProgress && enemiesKilledThisWave < totalEnemiesThisWave)
+            {
+                // Resume current wave
+                waveInProgress = true;
+                spawnCoroutine = StartCoroutine(ContinuousSpawnLoop());
+                Debug.Log($"[Wave] Waves ENABLED — resuming wave {currentWaveIndex}");
+            }
+            else if (enemiesKilledThisWave >= totalEnemiesThisWave || currentWaveIndex == 0)
+            {
+                // Start next wave
+                StartCoroutine(StartWaveAfterDelay(delayBetweenWaves));
+                Debug.Log("[Wave] Waves ENABLED — starting next wave");
+            }
         }
 
         private void Awake()
@@ -101,6 +139,7 @@ namespace TheScorpion.Systems
             enemiesKilledThisWave = 0;
             enemiesSpawnedThisWave = 0;
             sentinelsSpawnedThisWave = 0;
+            acolytesSpawnedThisWave = 0;
             elementalSpawnedThisWave = 0;
             aliveCount = 0;
             waveInProgress = true;
@@ -154,6 +193,7 @@ namespace TheScorpion.Systems
 
         // Track guaranteed spawns per wave
         private int sentinelsSpawnedThisWave;
+        private int acolytesSpawnedThisWave;
         private int elementalSpawnedThisWave;
 
         private (GameObject prefab, EnemyDataSO data) PickEnemyType()
@@ -161,8 +201,7 @@ namespace TheScorpion.Systems
             if (currentWaveIndex >= totalWaves && bossPrefab != null)
                 return (bossPrefab, bossData);
 
-            // Wave 3+: guaranteed 1 tank + 1 more per 2 waves
-            // Wave 3=1, Wave 4=1, Wave 5=2, Wave 6=2, Wave 7=3, ... Wave 10=4
+            // Wave 3+: guaranteed tanks — 1 + 1 per 2 waves
             if (currentWaveIndex >= 3)
             {
                 int minSentinels = 1 + (currentWaveIndex - 3) / 2;
@@ -173,15 +212,28 @@ namespace TheScorpion.Systems
                 }
             }
 
-            // Wave 5+: guaranteed 1 ninja + 1 more per 2 waves
-            // Wave 5=1, Wave 6=1, Wave 7=2, Wave 8=2, Wave 9=3, Wave 10=3
-            if (currentWaveIndex >= 5)
+            // Wave 4+: guaranteed fast acolytes — 1 + 1 per 2 waves
+            if (currentWaveIndex >= 4)
             {
-                int minElemental = 1 + (currentWaveIndex - 5) / 2;
-                if (elementalSpawnedThisWave < minElemental && fastEnemyPrefab != null)
+                int minAcolytes = 1 + (currentWaveIndex - 4) / 2;
+                if (acolytesSpawnedThisWave < minAcolytes && fastEnemyPrefab != null)
+                {
+                    acolytesSpawnedThisWave++;
+                    return (fastEnemyPrefab, fastEnemyData);
+                }
+            }
+
+            // Wave 6+: guaranteed elemental ninjas — 1 + 1 per 2 waves
+            if (currentWaveIndex >= 6)
+            {
+                int minElemental = 1 + (currentWaveIndex - 6) / 2;
+                if (elementalSpawnedThisWave < minElemental)
                 {
                     elementalSpawnedThisWave++;
-                    return (fastEnemyPrefab, fastEnemyData);
+                    // Use elemental prefab if assigned, otherwise fallback to basic
+                    var prefab = elementalNinjaPrefab != null ? elementalNinjaPrefab : basicEnemyPrefab;
+                    var data = elementalNinjaData != null ? elementalNinjaData : basicEnemyData;
+                    return (prefab, data);
                 }
             }
 
@@ -286,6 +338,10 @@ namespace TheScorpion.Systems
                         if (enemy.GetComponent<StoneSentinelBehavior>() == null)
                             enemy.AddComponent<StoneSentinelBehavior>();
                         break;
+                    case Core.EnemyType.Elemental:
+                        if (enemy.GetComponent<ElementalNinjaBehavior>() == null)
+                            enemy.AddComponent<ElementalNinjaBehavior>();
+                        break;
                 }
             }
 
@@ -295,6 +351,31 @@ namespace TheScorpion.Systems
             {
                 meleeManager.hitProperties.hitDamageTags.Clear();
                 meleeManager.hitProperties.hitDamageTags.Add("Player");
+            }
+
+            // Add floating health bar + tint enemy model by type
+            var hpBar = enemy.AddComponent<EnemyHealthBar>();
+            if (data != null)
+            {
+                switch (data.enemyType)
+                {
+                    case Core.EnemyType.Basic:
+                        hpBar.SetBarColor(new Color(0.8f, 0.15f, 0.1f)); // red bar
+                        hpBar.SetEnemyTint(new Color(0.9f, 0.35f, 0.3f)); // reddish
+                        break;
+                    case Core.EnemyType.Fast:
+                        hpBar.SetBarColor(new Color(0.2f, 0.8f, 0.3f)); // green bar
+                        hpBar.SetEnemyTint(new Color(0.3f, 0.85f, 0.35f)); // green
+                        break;
+                    case Core.EnemyType.Heavy:
+                        hpBar.SetBarColor(new Color(0.3f, 0.5f, 0.9f)); // blue bar
+                        hpBar.SetEnemyTint(new Color(0.35f, 0.45f, 0.85f)); // blue
+                        break;
+                    case Core.EnemyType.Elemental:
+                        hpBar.SetBarColor(new Color(0.6f, 0.2f, 1f)); // purple bar
+                        hpBar.SetEnemyTint(new Color(0.6f, 0.25f, 0.9f)); // purple
+                        break;
+                }
             }
 
             // Force AI to aggro player immediately
@@ -361,19 +442,91 @@ namespace TheScorpion.Systems
                     StopCoroutine(spawnCoroutine);
 
                 Debug.Log($"[Wave] Wave {currentWaveIndex} CLEARED!");
-                StartCoroutine(StartWaveAfterDelay(delayBetweenWaves));
+                if (WavesEnabled)
+                    StartCoroutine(StartWaveAfterDelay(delayBetweenWaves));
             }
         }
 
         private void OnAllWavesComplete()
         {
-            Debug.Log("[Scorpion] ALL WAVES COMPLETE — VICTORY!");
+            if (bossPrefab != null)
+            {
+                Debug.Log("[Scorpion] ALL WAVES COMPLETE — BOSS FIGHT!");
+                StartCoroutine(SpawnBossAfterDelay(3f));
+            }
+            else
+            {
+                Debug.Log("[Scorpion] ALL WAVES COMPLETE — VICTORY! (no boss prefab)");
+                if (onAllWavesClearedEvent != null)
+                    onAllWavesClearedEvent.RaiseEvent();
+                if (GameManager.Instance != null)
+                    GameManager.Instance.SetGameState(GameState.Victory);
+            }
+        }
 
-            if (onAllWavesClearedEvent != null)
-                onAllWavesClearedEvent.RaiseEvent();
+        private IEnumerator SpawnBossAfterDelay(float delay)
+        {
+            yield return new WaitForSeconds(delay);
 
-            if (GameManager.Instance != null)
-                GameManager.Instance.SetGameState(GameState.Victory);
+            var player = GetPlayer();
+            Vector3 spawnPos = player != null ? player.position + player.forward * 8f : Vector3.zero;
+
+            UnityEngine.AI.NavMeshHit navHit;
+            if (UnityEngine.AI.NavMesh.SamplePosition(spawnPos, out navHit, 15f, UnityEngine.AI.NavMesh.AllAreas))
+                spawnPos = navHit.position;
+
+            Quaternion rot = player != null
+                ? Quaternion.LookRotation((player.position - spawnPos).normalized)
+                : Quaternion.identity;
+
+            // Disable agent before instantiate
+            var prefabAgent = bossPrefab.GetComponent<UnityEngine.AI.NavMeshAgent>();
+            bool agentWas = false;
+            if (prefabAgent != null) { agentWas = prefabAgent.enabled; prefabAgent.enabled = false; }
+
+            var boss = Instantiate(bossPrefab, spawnPos, rot);
+
+            if (prefabAgent != null) prefabAgent.enabled = agentWas;
+
+            // Enable agent
+            var spawnedAgent = boss.GetComponent<UnityEngine.AI.NavMeshAgent>();
+            if (spawnedAgent != null)
+            {
+                spawnedAgent.enabled = false;
+                boss.transform.position = spawnPos;
+                spawnedAgent.enabled = true;
+                if (!spawnedAgent.isOnNavMesh && UnityEngine.AI.NavMesh.SamplePosition(spawnPos, out navHit, 20f, UnityEngine.AI.NavMesh.AllAreas))
+                    spawnedAgent.Warp(navHit.position);
+            }
+
+            // Init data
+            var ext = boss.GetComponent<EnemyExtension>();
+            if (ext != null && bossData != null)
+                ext.Initialize(bossData, onEnemyKilledEvent, onAdrenalineGainEvent);
+
+            // Add boss controller
+            if (boss.GetComponent<BossController>() == null)
+                boss.AddComponent<BossController>();
+
+            // Health bar + black tint for boss
+            var hpBar = boss.AddComponent<EnemyHealthBar>();
+            hpBar.SetBarColor(new Color(0.15f, 0.15f, 0.15f)); // black bar
+            hpBar.SetEnemyTint(new Color(0.1f, 0.1f, 0.1f)); // black model
+
+            // Aggro
+            var ai = boss.GetComponent<Invector.vCharacterController.AI.vSimpleMeleeAI_Controller>();
+            if (ai != null && player != null)
+                ai.SetCurrentTarget(player);
+
+            // Hit only player
+            var mm = boss.GetComponent<Invector.vMelee.vMeleeManager>();
+            if (mm != null)
+            {
+                mm.hitProperties.hitDamageTags.Clear();
+                mm.hitProperties.hitDamageTags.Add("Player");
+            }
+
+            Debug.Log($"[Wave] BOSS SPAWNED: {bossData?.enemyName ?? "Boss"} | HP: {bossData?.maxHealth ?? 500}");
         }
     }
 }
