@@ -353,7 +353,10 @@ namespace TheScorpion.Systems
                 meleeManager.hitProperties.hitDamageTags.Add("Player");
             }
 
-            // Add floating health bar + tint enemy model by type
+            // Remove Invector's built-in enemy health UI
+            RemoveInvectorHealthUI(enemy);
+
+            // Add our color-coded health bar
             var hpBar = enemy.AddComponent<EnemyHealthBar>();
             if (data != null)
             {
@@ -391,6 +394,38 @@ namespace TheScorpion.Systems
             }
 
             aliveCount++;
+        }
+
+        private void RemoveInvectorHealthUI(GameObject enemy)
+        {
+            // Remove v_SpriteHealth component
+            var spriteHealth = enemy.GetComponent<Invector.vCharacterController.v_SpriteHealth>();
+            if (spriteHealth != null)
+                Destroy(spriteHealth);
+
+            // Destroy the enemyHealthUI child by name
+            foreach (Transform child in enemy.transform)
+            {
+                if (child.name.Contains("healthUI") || child.name.Contains("HealthUI") ||
+                    child.name.Contains("enemyHealth") || child.name.Contains("EnemyHealth"))
+                {
+                    Destroy(child.gameObject);
+                    break;
+                }
+            }
+
+            // Also search deeper (in case it's nested)
+            var allChildren = enemy.GetComponentsInChildren<Transform>(true);
+            foreach (var t in allChildren)
+            {
+                if (t == enemy.transform) continue;
+                if (t.name.Contains("healthUI") || t.name.Contains("HealthUI") ||
+                    t.name.Contains("enemyHealth") || t.name.Contains("EnemyHealth"))
+                {
+                    Destroy(t.gameObject);
+                    break;
+                }
+            }
         }
 
         private void ForceAggroPlayer(GameObject enemy)
@@ -507,6 +542,9 @@ namespace TheScorpion.Systems
             // Add boss controller
             if (boss.GetComponent<BossController>() == null)
                 boss.AddComponent<BossController>();
+
+            // Remove Invector's built-in enemy health UI
+            RemoveInvectorHealthUI(boss);
 
             // Health bar + black tint for boss
             var hpBar = boss.AddComponent<EnemyHealthBar>();

@@ -118,7 +118,10 @@ namespace TheScorpion.Core
                 }
             }
 
-            // Health bar + name
+            // Remove Invector health UI
+            RemoveInvectorHealthUI(enemy);
+
+            // Our color-coded health bar
             var hpBar = enemy.AddComponent<TheScorpion.UI.EnemyHealthBar>();
             if (data != null)
             {
@@ -200,6 +203,8 @@ namespace TheScorpion.Core
             if (boss.GetComponent<BossController>() == null)
                 boss.AddComponent<BossController>();
 
+            RemoveInvectorHealthUI(boss);
+
             var hpBar = boss.AddComponent<TheScorpion.UI.EnemyHealthBar>();
             hpBar.SetBarColor(new Color(0.15f, 0.15f, 0.15f));
             hpBar.SetEnemyTint(new Color(0.1f, 0.1f, 0.1f));
@@ -215,6 +220,25 @@ namespace TheScorpion.Core
             }
 
             Debug.Log($"[TestSpawner] BOSS SPAWNED! HP: {(bossData != null ? bossData.maxHealth : 500)}. Waves disabled.");
+        }
+
+        private void RemoveInvectorHealthUI(GameObject enemy)
+        {
+            var spriteHealth = enemy.GetComponent<Invector.vCharacterController.v_SpriteHealth>();
+            if (spriteHealth != null)
+                Destroy(spriteHealth);
+
+            var allChildren = enemy.GetComponentsInChildren<Transform>(true);
+            foreach (var t in allChildren)
+            {
+                if (t == enemy.transform) continue;
+                if (t.name.Contains("healthUI") || t.name.Contains("HealthUI") ||
+                    t.name.Contains("enemyHealth") || t.name.Contains("EnemyHealth"))
+                {
+                    Destroy(t.gameObject);
+                    break;
+                }
+            }
         }
     }
 }
