@@ -11,8 +11,13 @@ namespace TheScorpion.Player
         [SerializeField] private float maxAdrenaline = 100f;
         [SerializeField] private float ultimateDuration = 8f;
         [SerializeField] private float timeSlowFactor = 0.5f;
-        [SerializeField] private float damageMultiplier = 1.5f;
+        [SerializeField] private float damageMultiplier = 2.5f;
         [SerializeField] private float attackSpeedBonus = 0.3f;
+
+        [Header("Continuous AoE During Ultimate")]
+        [SerializeField] private float auraTickDamage = 12f;
+        [SerializeField] private float auraTickRadius = 5f;
+        [SerializeField] private float auraTickInterval = 0.5f;
 
         [Header("Adrenaline Gain")]
         [SerializeField] private float adrenalinePerHit = 1.2f;
@@ -40,6 +45,9 @@ namespace TheScorpion.Player
         private void Awake()
         {
             playerAnimator = GetComponent<Animator>();
+            // Auto-find ElementSystem if not assigned in Inspector
+            if (elementSystem == null)
+                elementSystem = GetComponent<ElementSystem>();
         }
 
         private void OnEnable()
@@ -131,7 +139,14 @@ namespace TheScorpion.Player
 
             Debug.Log($"[Scorpion] ULTIMATE ACTIVATED! {ultimateDuration}s — x{damageMultiplier} damage, +{attackSpeedBonus * 100}% speed");
 
-            yield return new WaitForSecondsRealtime(ultimateDuration);
+            // === CONTINUOUS AoE DAMAGE during ultimate ===
+            float elapsed = 0f;
+            while (elapsed < ultimateDuration)
+            {
+                DealAuraTick();
+                yield return new WaitForSecondsRealtime(auraTickInterval);
+                elapsed += auraTickInterval;
+            }
 
             // === BURST FINALE ===
             PerformElementalBurst();
@@ -197,7 +212,7 @@ namespace TheScorpion.Player
             sizeOverLife.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0, 1, 1, 0));
 
             var renderer = ringGO.GetComponent<ParticleSystemRenderer>();
-            renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+            renderer.material = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Particles/Standard Unlit"));
             renderer.material.color = new Color(1f, 0.9f, 0.5f);
 
             Destroy(ringGO, 1.5f);
@@ -256,47 +271,82 @@ namespace TheScorpion.Player
             colorOverLife.color = grad;
 
             var renderer = auraGO.GetComponent<ParticleSystemRenderer>();
-            renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+            renderer.material = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Particles/Standard Unlit"));
             renderer.material.color = new Color(1f, 0.85f, 0.3f);
 
             return auraGO;
         }
 
+        private void DealAuraTick()
+        {
+            Collider[] hits = Physics.OverlapSphere(transform.position, auraTickRadius, LayerMask.GetMask("Enemy"));
+            foreach (var hit in hits)
+            {
+                var health = hit.GetComponentInParent<Invector.vHealthController>();
+                if (health != null && !health.isDead)
+                {
+                    var dmg = new Invector.vDamage((int)auraTickDamage);
+                    dmg.sender = transform;
+                    if (elementSystem != null)
+                        dmg.damageType = elementSystem.ActiveElement.ToString();
+                    health.TakeDamage(dmg);
+                }
+            }
+        }
+
         private void PerformElementalBurst()
         {
-            if (elementSystem == null) return;
-            var data = elementSystem.GetActiveData();
-            if (data == null) return;
+            // Auto-find if serialized ref was lost
+            if (elementSystem == null)
+                elementSystem = GetComponent<ElementSystem>();
+
+            float burstRadius = 10f;
+            float burstDamage = 80f;
+            float burstStun = 2f;
+            string damageType = "Fire";
+
+            // Override with ElementDataSO values if available
+            if (elementSystem != null)
+            {
+                damageType = elementSystem.ActiveElement.ToString();
+                var data = elementSystem.GetActiveData();
+                if (data != null)
+                {
+                    burstRadius = data.burstRadius > 0 ? data.burstRadius : burstRadius;
+                    burstDamage = data.burstDamage > 0 ? data.burstDamage : burstDamage;
+                    burstStun = data.burstStunDuration;
+                }
+            }
 
             // === BURST VFX ===
-            SpawnBurstVFX(data.burstRadius);
+            SpawnBurstVFX(burstRadius);
 
             // Heavy camera shake for burst
             if (VFX.CameraShakeController.Instance != null)
                 VFX.CameraShakeController.Instance.DoShake(4f, 0.4f);
 
             // Damage all enemies in radius
-            Collider[] hits = Physics.OverlapSphere(transform.position, data.burstRadius, LayerMask.GetMask("Enemy"));
+            Collider[] hits = Physics.OverlapSphere(transform.position, burstRadius, LayerMask.GetMask("Enemy"));
             foreach (var hit in hits)
             {
                 var health = hit.GetComponentInParent<Invector.vHealthController>();
                 if (health != null && !health.isDead)
                 {
-                    var dmg = new Invector.vDamage((int)data.burstDamage);
-                    dmg.damageType = elementSystem.ActiveElement.ToString();
+                    var dmg = new Invector.vDamage((int)burstDamage);
+                    dmg.damageType = damageType;
                     dmg.sender = transform;
                     health.TakeDamage(dmg);
                 }
 
-                if (data.burstStunDuration > 0f)
+                if (burstStun > 0f)
                 {
                     var statusEffects = hit.GetComponentInParent<Enemy.EnemyStatusEffects>();
                     if (statusEffects != null)
-                        statusEffects.ApplyStun(data.burstStunDuration);
+                        statusEffects.ApplyStun(burstStun);
                 }
             }
 
-            Debug.Log($"[Scorpion] ELEMENTAL BURST ({elementSystem.ActiveElement})! Hit {hits.Length} enemies for {data.burstDamage} damage");
+            Debug.Log($"[Scorpion] ELEMENTAL BURST ({damageType})! Hit {hits.Length} enemies for {burstDamage} damage");
         }
 
         private void SpawnBurstVFX(float radius)
@@ -355,7 +405,7 @@ namespace TheScorpion.Player
             colorOverLife.color = grad;
 
             var renderer = burstGO.GetComponent<ParticleSystemRenderer>();
-            renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+            renderer.material = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Particles/Standard Unlit"));
             renderer.material.color = burstColor;
 
             Destroy(burstGO, 2f);

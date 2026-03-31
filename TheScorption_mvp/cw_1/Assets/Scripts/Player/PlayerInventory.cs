@@ -94,7 +94,7 @@ namespace TheScorpion.Player
             shape.radius = 0.5f;
 
             var renderer = go.GetComponent<ParticleSystemRenderer>();
-            renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+            renderer.material = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Particles/Standard Unlit"));
             renderer.material.color = new Color(0.2f, 1f, 0.4f);
 
             Destroy(go, 1.5f);

@@ -71,14 +71,16 @@ namespace TheScorpion.Core
             switch (newState)
             {
                 case GameState.PreGame:
-                    Time.timeScale = 0f;
+                    Time.timeScale = 1f; // Keep timeScale 1 so Invector initializes properly
                     ShowCursor();
+                    LockPlayerInput(true);
                     break;
 
                 case GameState.Playing:
                     Time.timeScale = 1f;
                     Time.fixedDeltaTime = 0.02f;
                     HideCursor();
+                    LockPlayerInput(false);
                     break;
 
                 case GameState.Paused:
@@ -126,6 +128,18 @@ namespace TheScorpion.Core
             gameTimer = 0f;
             totalKills = 0;
             SetGameState(GameState.Playing);
+            // Force cursor lock after a frame — builds need this delay
+            StartCoroutine(ForceCursorLock());
+        }
+
+        private System.Collections.IEnumerator ForceCursorLock()
+        {
+            yield return null; // wait one frame
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+            yield return null; // wait another frame
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
         }
 
         public void RestartGame()
@@ -151,6 +165,16 @@ namespace TheScorpion.Core
             totalKills++;
         }
 
+        private void LockPlayerInput(bool locked)
+        {
+            var input = FindAnyObjectByType<Invector.vCharacterController.vThirdPersonInput>();
+            if (input != null)
+            {
+                input.SetLockAllInput(locked);
+                input.SetLockCameraInput(locked);
+            }
+        }
+
         private void ShowCursor()
         {
             Cursor.lockState = CursorLockMode.None;
@@ -161,6 +185,16 @@ namespace TheScorpion.Core
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
+        }
+
+        // In builds, re-lock cursor when window regains focus during gameplay
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            if (hasFocus && currentState == GameState.Playing)
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
         }
 
         public bool IsPlaying => currentState == GameState.Playing;

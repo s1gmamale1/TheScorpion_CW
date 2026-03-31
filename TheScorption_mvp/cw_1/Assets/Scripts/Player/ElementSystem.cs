@@ -326,7 +326,7 @@ namespace TheScorpion.Player
             colorOverLife.color = grad;
 
             var renderer = go.GetComponent<ParticleSystemRenderer>();
-            renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+            renderer.material = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Particles/Standard Unlit"));
             renderer.material.SetFloat("_Mode", 2); // Fade mode
             renderer.material.color = new Color(0.3f, 0.7f, 1f, 0.4f);
 
@@ -393,8 +393,11 @@ namespace TheScorpion.Player
             Debug.Log($"[Scorpion] Fire Aura ACTIVE for {data.ability2Duration}s — melee hits apply burn");
 
             var vfxGO = CreateFireAuraVFX();
-            vfxGO.transform.SetParent(transform);
-            vfxGO.transform.localPosition = Vector3.zero;
+            if (vfxGO != null)
+            {
+                vfxGO.transform.SetParent(transform);
+                vfxGO.transform.localPosition = Vector3.zero;
+            }
 
             yield return new WaitForSeconds(data.ability2Duration);
 
@@ -409,8 +412,11 @@ namespace TheScorpion.Player
             Debug.Log($"[Scorpion] Lightning Speed ACTIVE for {data.ability2Duration}s — +{data.ability2AttackSpeedBonus * 100}% atk, +{data.ability2MoveSpeedBonus * 100}% move");
 
             var vfxGO = CreateLightningSpeedVFX();
-            vfxGO.transform.SetParent(transform);
-            vfxGO.transform.localPosition = Vector3.zero;
+            if (vfxGO != null)
+            {
+                vfxGO.transform.SetParent(transform);
+                vfxGO.transform.localPosition = Vector3.zero;
+            }
 
             var motor = GetComponent<Invector.vCharacterController.vThirdPersonController>();
             float origWalk = 0f, origRun = 0f, origSprint = 0f;
@@ -488,7 +494,7 @@ namespace TheScorpion.Player
 
             // Use default particle material
             var renderer = go.GetComponent<ParticleSystemRenderer>();
-            renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+            renderer.material = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Particles/Standard Unlit"));
             renderer.material.color = new Color(1f, 0.5f, 0.1f, 1f);
 
             return go;
@@ -536,7 +542,7 @@ namespace TheScorpion.Player
             colorOverLife.color = grad;
 
             var renderer = go.GetComponent<ParticleSystemRenderer>();
-            renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+            renderer.material = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Particles/Standard Unlit"));
             renderer.material.color = new Color(0.4f, 0.7f, 1f, 1f);
 
             return go;

@@ -635,6 +635,16 @@ namespace TheScorpion.UI
             if (playerInventory == null)
                 playerInventory = FindAnyObjectByType<PlayerInventory>();
 
+            // Press Enter to start game from main menu
+            if (GameManager.Instance != null && GameManager.Instance.CurrentState == GameState.PreGame
+                && startPanel != null && startPanel.activeSelf
+                && (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)))
+            {
+                GameManager.Instance.StartGame();
+                if (WaveManager.Instance != null)
+                    WaveManager.Instance.StartFirstWave();
+            }
+
             // Poll GameManager state
             if (GameManager.Instance != null && GameManager.Instance.CurrentState != lastKnownState)
             {

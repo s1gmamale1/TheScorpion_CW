@@ -1,3 +1,50 @@
+# Dev Log — The Scorpion + GyattMaxxer5000
+
+---
+
+## 2026-03-31 — Windows Build Bug Fixes (Shader Platform Issue)
+
+### Bugs Reported
+Three features broken in Windows standalone build, working fine in Mac editor:
+1. R ability (Ability 2) — not displaying or working
+2. Adrenaline Rush — VFX not showing, ability not activating
+3. Healing potions — picked up but potion stays in world / doesn't register
+
+### Root Cause
+All three bugs caused by a single issue: `Shader.Find("Particles/Standard Unlit")` returns `null` in a URP Windows standalone build.
+
+`Particles/Standard Unlit` is a legacy Built-in pipeline shader. In the Unity Editor (Mac), all shaders are compiled and available. In a URP Windows standalone build, legacy shaders not in "Always Included Shaders" are stripped at build time. `Shader.Find()` returns null → `new Material(null)` throws `ArgumentNullException`.
+
+### Cascade Failure Explained
+
+**Ability 2 + Ultimate permanently locked:**
+- Both `FireAura`/`LightningSpeed` coroutines set `ability2Active = true` before calling VFX creation
+- VFX creation throws → coroutine dies mid-execution
+- `ability2Active` stuck as `true` forever → every subsequent R press silently blocked by `if (ability2Active) return`
+- Same pattern for `UltimateCoroutine` / `isUltimateActive`
+
+**Potions not disappearing:**
+- `Destroy(gameObject)` was called AFTER `SpawnPickupVFX()` in `OnTriggerEnter`
+- VFX throws → Destroy never called → potion stays visible in world
+- Count WAS being incremented (AddHealthPotion called before VFX) but potion didn't disappear
+
+### Files Fixed
+- `Assets/Scripts/Player/ElementSystem.cs` — replaced all 3x `Shader.Find("Particles/Standard Unlit")` with URP fallback; added null-guards on vfxGO in FireAura and LightningSpeed coroutines
+- `Assets/Scripts/Player/UltimateSystem.cs` — replaced all 3x shader finds with URP fallback
+- `Assets/Scripts/Systems/HealPotionPickup.cs` — fixed shader; moved `Destroy(gameObject)` BEFORE `SpawnPickupVFX()` so potion always disappears even if VFX fails
+- `Assets/Scripts/Player/PlayerInventory.cs` — replaced shader find with URP fallback
+
+### Fix Applied
+```csharp
+// Before (broken on Windows URP build):
+new Material(Shader.Find("Particles/Standard Unlit"))
+
+// After (safe on both platforms):
+new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Particles/Standard Unlit"))
+```
+
+---
+
 # Dev Log — GyattMaxxer5000 / Custom AI Build Project
 
 > All responses and progress saved here. Most recent entries at the bottom.

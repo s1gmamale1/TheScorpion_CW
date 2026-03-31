@@ -27,27 +27,27 @@ namespace TheScorpion.Systems
             light.range = 3f;
             light.intensity = 2f;
 
-            // Make sure we have a trigger collider
-            var col = GetComponent<Collider>();
-            if (col == null)
+            // Make sure we have a trigger collider — large enough to pick up at small scale
+            var cols = GetComponents<Collider>();
+            if (cols.Length == 0)
             {
                 var sphere = gameObject.AddComponent<SphereCollider>();
-                sphere.radius = 0.8f;
+                sphere.radius = 5f; // world radius ~0.89m at 0.178 scale
                 sphere.isTrigger = true;
             }
             else
             {
-                col.isTrigger = true;
+                foreach (var c in cols)
+                    c.isTrigger = true;
             }
 
-            // Rigidbody for trigger detection (kinematic)
+            // Rigidbody for trigger detection — ALWAYS force kinematic + no gravity
+            // even if the prefab already has a rigidbody with different settings
             var rb = GetComponent<Rigidbody>();
             if (rb == null)
-            {
                 rb = gameObject.AddComponent<Rigidbody>();
-                rb.useGravity = false;
-                rb.isKinematic = true;
-            }
+            rb.useGravity = false;
+            rb.isKinematic = true;
         }
 
         private void Update()
@@ -78,11 +78,10 @@ namespace TheScorpion.Systems
             {
                 collected = true;
                 inventory.AddHealthPotion();
+                Destroy(gameObject);
 
                 // Pickup VFX — green sparkle burst
                 SpawnPickupVFX();
-
-                Destroy(gameObject);
             }
         }
 
@@ -109,7 +108,7 @@ namespace TheScorpion.Systems
             shape.radius = 0.3f;
 
             var renderer = go.GetComponent<ParticleSystemRenderer>();
-            renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+            renderer.material = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Particles/Standard Unlit"));
             renderer.material.color = new Color(0.2f, 1f, 0.4f);
 
             Destroy(go, 1f);
