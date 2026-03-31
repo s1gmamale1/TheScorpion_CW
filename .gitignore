@@ -1,3 +1,49 @@
+# Unity
+TheScorption_mvp/cw_1/Library/
+TheScorption_mvp/cw_1/Temp/
+TheScorption_mvp/cw_1/Obj/
+TheScorption_mvp/cw_1/Build/
+TheScorption_mvp/cw_1/Builds/
+TheScorption_mvp/cw_1/Logs/
+TheScorption_mvp/cw_1/UserSettings/
+TheScorption_mvp/cw_1/MemoryCaptures/
+
+# IDE
+.vs/
+.vscode/
+*.csproj
+*.sln
+*.slnx
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.unityproj
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+
+# MCP tools — separate repos, install via npm on other PC
+mcp-tools/
+
+# Claude local settings
+.claude/settings.local.json
+.claude/projects/
+
+# Non-project files
+dw&v_coursework*
+
+# Secrets
 .env
-.env.txt
-.claude/
+.env.*
+
+# Misc
+*.log
+/private/tmp/
